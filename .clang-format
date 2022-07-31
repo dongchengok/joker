@@ -7,7 +7,7 @@
 BasedOnStyle:  LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
-AlignArrayOfStructures: Right
+# AlignArrayOfStructures: Right
 AlignConsecutiveMacros: AcrossEmptyLines 
 AlignConsecutiveAssignments: true
 AlignConsecutiveBitFields: true
@@ -121,7 +121,7 @@ KeepEmptyLinesAtTheStartOfBlocks: false
 # PenaltyIndentedWhitespace: 0
 PointerAlignment: Left
 # PPIndentWidth:   -1
-ReferenceAlignment: Pointer
+# ReferenceAlignment: Pointer
 # ReflowComments:  true
 # ShortNamespaceLines: 1
 # SortIncludes:    CaseSensitive
@@ -150,9 +150,9 @@ ReferenceAlignment: Pointer
 # SpacesInCStyleCastParentheses: false
 ## Godot TODO: We'll want to use a min of 1, but we need to see how to fix
 ## our comment capitalization at the same time.
-SpacesInLineCommentPrefix:
-  Minimum:         0
-  Maximum:         -1
+# SpacesInLineCommentPrefix:
+#  Minimum:         0
+# Maximum:         -1
 # SpacesInParentheses: false
 # SpacesInSquareBrackets: false
 # SpaceBeforeSquareBrackets: false
