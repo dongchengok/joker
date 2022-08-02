@@ -43,7 +43,6 @@ void* operator new[](size_t size, size_t /*alignment*/, size_t /*alignmentOffset
 // 	printf("%d",haha());
 // 	return 0;
 // }
-#include "JokerCoreType.h"
 
 #include <vk_engine.h>
 

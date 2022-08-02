@@ -1,5 +1,5 @@
 joker_project_app(xixi)
-target_link_libraries(xixi PUBLIC JokerCore)
+target_link_libraries(xixi PUBLIC JokerEngine)
 
 # macro(source_group_by_dir source_files)
 #     if(MSVC)

@@ -17,6 +17,10 @@ function(joker_project_use_pch target_project)
     if(EXISTS "${_PCH_PATH}.h" AND EXISTS "${_PCH_PATH}.cpp")
         # 遍历所有源文件，只给cpp文件使用预编译头
         get_target_property(_TARGET_SOURCES ${target_project} SOURCES)
+        # 创建预编译头
+        set_property(SOURCE "${_PCH_PATH}.cpp" APPEND_STRING PROPERTY COMPILE_FLAGS " /Yc\"${_PCH_HEADER}\" /Fp\"${_PCH_FILE}\" ")
+        # 设置输出文件
+        set_source_files_properties("${_PCH_PATH}.cpp" PROPERTIES OBJECT_OUTPUTS "${_PCH_FILE}")
         foreach(_sourcefile ${_TARGET_SOURCES})
             if ("${_sourcefile}" MATCHES ".*\\.\\cpp$")
                 if (NOT "${_sourcefile}" STREQUAL "${_PCH_PATH}.cpp")
@@ -24,16 +28,13 @@ function(joker_project_use_pch target_project)
                     set_property(SOURCE "${_sourcefile}" APPEND_STRING PROPERTY COMPILE_FLAGS " /Yu\"${_PCH_HEADER}\" /Fp\"${_PCH_FILE}\" ")
                     # 设置依赖文件
                     set_source_files_properties("${_sourcefile}" PROPERTIES OBJECT_DEPENDS "${_PCH_FILE}")
-                else()
-                    # 创建预编译头
-                    set_property(SOURCE "${_sourcefile}" APPEND_STRING PROPERTY COMPILE_FLAGS " /Yc\"${_PCH_HEADER}\" /Fp\"${_PCH_FILE}\" ")
-                    # 设置输出文件
-                    set_source_files_properties("${_sourcefile}" PROPERTIES OBJECT_OUTPUTS "${_PCH_FILE}")
                 endif()
             endif()
         endforeach()
+        # 不加/FI的话.h代码提示有问题
+        target_compile_options(${target_project} PRIVATE "/FI${_PCH_HEADER}")
     else()
-        message(STATUS "not have pch:${_project_name}PCH.h")
+        message(STATUS "not have pch:${_PCH_PATH}.h or ${_PCH_PATH}.cpp")
     endif()
 endfunction()
 
