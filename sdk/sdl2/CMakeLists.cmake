@@ -4,10 +4,12 @@ if(NOT Vulkan_FOUND)
 endif()
 
 if(Vulkan_FOUND)
+    # 新老版本的vulkan目录不一样，真讨厌
     find_path(SDL2_INCLUDE_DIR
         NAMES SDL2/SDL.h
         HINTS
         "$ENV{VULKAN_SDK}/Third-Party/Include"
+        "$ENV{VULKAN_SDK}/Include"
         )
     if(WIN32)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -16,6 +18,8 @@ if(Vulkan_FOUND)
                 NAMES SDL2 SDL2main
                 HINTS
                 "$ENV{VULKAN_SDK}/Third-Party/Bin"
+                "$ENV{VULKAN_SDK}/Bin"
+                "$ENV{VULKAN_SDK}/Lib"
                 )
         elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
             # 32位系统
@@ -23,6 +27,8 @@ if(Vulkan_FOUND)
             NAMES SDL2 SDL2main
                 HINTS
                 "$ENV{VULKAN_SDK}/Third-Party/Bin32"
+                "$ENV{VULKAN_SDK}/Bin32"
+                "$ENV{VULKAN_SDK}/Lib32"
                 )
         endif()
 
