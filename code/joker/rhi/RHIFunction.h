@@ -2,6 +2,7 @@
 
 #include "CoreType.h"
 #include "RHIFunction.h"
+#include "RHIType.h"
 #include <vcruntime.h>
 #if defined(JOPTION_RHI_MULTI)
 #define JDECL_RHI_FUNC(ret, name, ...)    \
@@ -15,47 +16,6 @@
 #define JIMPL_RHI_FUNC(ret, name, ...) \
 	ret name(__VA_ARGS__);
 #endif
-
-struct RHIRenderer;
-struct RHIFence;
-struct RHIFenceStatus;
-struct RHISemaphore;
-struct RHIQueueDesc;
-struct RHIQueue;
-struct RHIQueueSubmitDesc;
-struct RHIQueuePresentDesc;
-struct RHISwapChainDesc;
-struct RHISwapChain;
-struct RHICmdPoolDesc;
-struct RHICmdPool;
-struct RHICmdDesc;
-struct RHICmd;
-struct RHIRenderTargetDesc;
-struct RHIRenderTarget;
-struct RHIRenderTargetBarrier;
-struct RHISamplerDesc;
-struct RHISampler;
-struct RHIShaderDesc;
-struct RHIShader;
-struct RHIRootSignatureDesc;
-struct RHIRootSignature;
-struct RHICommandSignatureDesc;
-struct RHICommandSignature;
-struct RHIPipelineDesc;
-struct RHIPipeline;
-struct RHIPipelineCacheDesc;
-struct RHIPipelineCache;
-struct RHIDescriptorSetDesc;
-struct RHIDescriptorSet;
-struct RHIDescriptorData;
-struct RHILoadActionsDesc;
-struct RHITexture;
-struct RHITextureBarrier;
-struct RHIBuffer;
-struct RHIBufferBarrier;
-struct RHIQueryPoolDesc;
-struct RHIQueryPool;
-struct RHIQueryDesc;
 
 enum class EShadingRate
 {
@@ -71,6 +31,11 @@ enum class EMarkerType
 {
 
 };
+
+extern void RHIInitRendererContext(const char* szAppName, const RHIRendererContextDesc* pSettings, RHIRendererContext** ppContext);
+extern void RHIExitRendererContext(RHIRendererContext* pContext);
+extern void RHIInitRenderer(const char* szAppName, const RHIRendererDesc* pSettings, RHIRenderer* pRenderer);
+extern void RHIExitRenderer(RHIRenderer* pRenderer);
 
 JDECL_RHI_FUNC(void, RHIAddFence, RHIRenderer* pRenderer, RHIFence** ppFence)
 JDECL_RHI_FUNC(void, RHIRemoveFence, RHIRenderer* pRenderer, RHIFence* pFence)
@@ -144,12 +109,12 @@ JDECL_RHI_FUNC(void, RHIGetFenceStatus, RHIRenderer* pRenderer, RHIFence* pFence
 JDECL_RHI_FUNC(void, RHIWaitForFences, RHIRenderer* pRenderer, u32 uFenceCount, RHIFence** ppFences)
 JDECL_RHI_FUNC(void, RHIToggleVSync, RHIRenderer* pRenderer, RHISwapChain** ppSwapChain)
 
-//Returns the recommended format for the swapchain.
-//If true is passed for the hintHDR parameter, it will return an HDR format IF the platform supports it
-//If false is passed or the platform does not support HDR a non HDR format is returned.
-//If true is passed for the hintSrgb parameter, it will return format that is will do gamma correction automatically
-//If false is passed for the hintSrgb parameter the gamma correction should be done as a postprocess step before submitting image to swapchain
-// JDECL_RHI_FUNC(EImageFormat, RHIGetRecommendedSwapchainFormat, bool bHDR, bool bSRGB)
+// Returns the recommended format for the swapchain.
+// If true is passed for the hintHDR parameter, it will return an HDR format IF the platform supports it
+// If false is passed or the platform does not support HDR a non HDR format is returned.
+// If true is passed for the hintSrgb parameter, it will return format that is will do gamma correction automatically
+// If false is passed for the hintSrgb parameter the gamma correction should be done as a postprocess step before submitting image to swapchain
+//  JDECL_RHI_FUNC(EImageFormat, RHIGetRecommendedSwapchainFormat, bool bHDR, bool bSRGB)
 
 JDECL_RHI_FUNC(void, RHIAddIndirectCommandSignature, RHIRenderer* pRender, const RHICommandSignatureDesc* pDesc, RHICommandSignature** ppCommandSignature)
 JDECL_RHI_FUNC(void, RHIRemoveIndirectCommandSignature, RHIRenderer* pRenderer, RHICommandSignature* pCommandSignature)

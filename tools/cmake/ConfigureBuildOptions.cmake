@@ -1,0 +1,23 @@
+
+option(JOPTION_RHI_MULTI "支持多渲染接口切换" ON)
+option(JOPTION_RHI_NULL "支持Null" ON)
+option(JOPTION_RHI_VULKAN "支持Vulkan" ON)
+
+set(JOPTION_RHI_MULTI OFF)
+set(JOPTION_RHI_NULL ON)
+
+message(STATUS "JOPTION_RHI_MULTI=${JOPTION_RHI_MULTI}")
+message(STATUS "JOPTION_RHI_NULL=${JOPTION_RHI_NULL}")
+message(STATUS "JOPTION_RHI_VULKAN=${JOPTION_RHI_VULKAN}")
+
+if(JOPTION_RHI_MULTI)
+    add_definitions(-DJOPTION_RHI_MULTI)
+endif()
+
+if(JOPTION_RHI_NULL)
+    add_definitions(-DJOPTION_RHI_NULL)
+endif()
+
+if(JOPTION_RHI_VULKAN)
+    add_definitions(-DJOPTION_RHI_VULKAN)
+endif()
