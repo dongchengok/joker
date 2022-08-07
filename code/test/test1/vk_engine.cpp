@@ -2,7 +2,6 @@
 #include "vk_engine.h"
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_vulkan.h>
 
 void VulkanEngine::init()
 {
@@ -15,8 +14,8 @@ void VulkanEngine::init()
 		"Vulkan Engine",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
-		_windowExtent.width,
-		_windowExtent.height,
+		1700,
+		900,
 		window_flags
 	);
 	

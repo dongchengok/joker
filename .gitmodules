@@ -1,3 +1,9 @@
 [submodule "3rd/EASTL"]
 	path = 3rd/EASTL
 	url = git@github.com:dongchengok/EASTL.git
+[submodule "3rd/volk"]
+	path = 3rd/volk
+	url = https://github.com/zeux/volk.git
+[submodule "3rd/spdlog"]
+	path = 3rd/spdlog
+	url = git@github.com:dongchengok/spdlog.git

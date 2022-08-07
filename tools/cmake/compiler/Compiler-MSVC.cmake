@@ -38,11 +38,10 @@ function(joker_project_use_pch target_project)
     endif()
 endfunction()
 
+# add_compile_options(/EHsc /GR-)
+string(REPLACE "/GR" "/GR-" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+# _HAS_EXCEPTIONS=0
+
 # 使用标准
 # target_compile_options(${TargetProject} PRIVATE "/permissive-")
 # target_compile_options(${THIS_PROJECT} PRIVATE /EHsc /W0 /Wv:18)
-
-# /Yc"JokerCorePCH.h" /ifcOutput "JokerCore.dir\Debug\" /GS /W3 /Zc:wchar_t /I"E:\Work\joker\code\joker\core" /I"E:\Work\joker\3rd\EASTL\include" /I"E:\Work\joker\3rd\EASTL\test\packages\EABase\include\Common" /I"E:\Program Files\VulkanSDK\1.2.198.1\Include" /I"E:\Program Files\VulkanSDK\1.2.198.1\Third-Party\Include" /Zi /Gm- /Od /Ob0 /Fd"E:\Work\joker\build\code\joker\core\Debug\JokerCore.pdb" /Zc:inline /fp:precise /D "_MBCS" /D "WIN32" /D "_WINDOWS" /D "CMAKE_INTDIR=\"Debug\"" /errorReport:prompt /WX- /Zc:forScope /RTC1 /GR /Gd /MDd /std:c++17 /Fa"JokerCore.dir\Debug\" /EHsc /nologo /Fo"JokerCore.dir\Debug\" /Fp"JokerCore.dir\Debug\JokerCore.pch" /diagnostics:column 
-# "command": "C:\\PROGRA~2\\MICROS~3\\2019\\COMMUN~1\\VC\\Tools\\MSVC\\1429~1.301\\bin\\Hostx64\\x64\\cl.exe  /nologo /TP -IE:\\Work\\joker\\code\\joker\\core -IE:\\Work\\joker\\3rd\\EASTL\\include -IE:\\Work\\joker\\3rd\\EASTL\\test\\packages\\EABase\\include\\Common -external:I\"E:\\Program Files\\VulkanSDK\\1.2.198.1\\Include\" -external:I\"E:\\Program Files\\VulkanSDK\\1.2.198.1\\Third-Party\\Include\" -external:W0 /DWIN32 /D_WINDOWS /W3 /GR /EHsc /MDd /Zi /Ob0 /Od /RTC1 -std:c++17  /Yc\"JokerCorePCH.h\" /Fp\"E:/Work/joker/build/code/joker/core/CMakeFiles/JokerCore.dir/JokerCorePCH.pch\"  /Focode\\joker\\core\\CMakeFiles\\JokerCore.dir\\JokerCorePCH.cpp.obj /FdTARGET_COMPILE_PDB /FS -c E:\\Work\\joker\\code\\joker\\core\\JokerCorePCH.cpp",
-# E:/Work/joker/build/code/joker/core/CMakeFiles/JokerCore.dir/JokerCorePCH.pch
-# E:/Work/joker/build/code/joker/core/CMakeFiles/JokerCore.dir/JokerCorePCH.pch

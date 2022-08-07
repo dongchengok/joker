@@ -1,4 +1,7 @@
-#include <vulkan/vulkan_core.h>
+#pragma once
+
+#define SDL_MAIN_HANDLED
+#include <SDL2/SDL.h>
 
 class VulkanEngine {
 public:
@@ -6,7 +9,7 @@ public:
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 
-	VkExtent2D _windowExtent{ 1700 , 900 };
+	// VkExtent2D _windowExtent{ 1700 , 900 };
 
 	struct SDL_Window* _window{ nullptr };
 
