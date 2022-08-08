@@ -83,3 +83,9 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 #define JMALLOC(size)                              malloc(size)
 #define JMALLOC_ALIGNED(count, size, aligned_size) malloc(size)
 #define JCALLOC(count, size)                       calloc(count, size)
+#define JFREE(ptr)                                                                                                                                   \
+    if (ptr)                                                                                                                                         \
+    {                                                                                                                                                \
+        free(ptr);                                                                                                                                   \
+        ptr = nullptr;                                                                                                                               \
+    }

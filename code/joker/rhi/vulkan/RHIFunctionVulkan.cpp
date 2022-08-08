@@ -89,6 +89,45 @@ void RHIInitVulkanAPI()
     JREG_RHI_FUNC_VK(RHIRemoveFence)
 }
 
+static void* VKAPI_PTR gVkAllocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return tf_memalign(alignment, size);
+}
+
+static void* VKAPI_PTR
+			 gVkReallocation(void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return tf_realloc(pOriginal, size);
+}
+
+static void VKAPI_PTR gVkFree(void* pUserData, void* pMemory) { tf_free(pMemory); }
+
+static void VKAPI_PTR
+			gVkInternalAllocation(void* pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
+{
+}
+
+static void VKAPI_PTR
+			gVkInternalFree(void* pUserData, size_t size, VkInternalAllocationType allocationType, VkSystemAllocationScope allocationScope)
+{
+}
+
+VkAllocationCallbacks gVkAllocationCallbacks =
+{
+	// pUserData
+	NULL,
+	// pfnAllocation
+	gVkAllocation,
+	// pfnReallocation
+	gVkReallocation,
+	// pfnFree
+	gVkFree,
+	// pfnInternalAllocation
+	gVkInternalAllocation,
+	// pfnInternalFree
+	gVkInternalFree
+};
+
 void RHICreateInstance(const char* szName, const RHIRendererDesc* pDesc, uint32_t uInstanceLayerCount, const char** ppInstanceLayers,
                        RHIRenderer* pRenderer)
 {
@@ -158,7 +197,9 @@ void RHICreateInstance(const char* szName, const RHIRendererDesc* pDesc, uint32_
         {
             wantedInstanceExtensions[uInitialCount + i] = pDesc->Vulkan.m_ppInstanceExtensions[i];
         }
-        const u32 uWantedExtensionCount = (u32)wantedInstanceExtensions.size();
+        const u32 uWantedExtensionCount         = (u32)wantedInstanceExtensions.size();
+        bool      bDeviceGroupCreationExtension = false;
+        bool      bDebugUtilsExtension          = false;
         for (size_t i = 0; i < layerTemp.size(); ++i)
         {
             const char* szLayerName = layerTemp[i];
@@ -173,14 +214,79 @@ void RHICreateInstance(const char* szName, const RHIRendererDesc* pDesc, uint32_
                 {
                     if (strcmp(wantedInstanceExtensions[k], pProperties[j].extensionName) == 0)
                     {
-                        if(strcmp(wantedInstanceExtensions[k], VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME)==0)
+                        if (strcmp(wantedInstanceExtensions[k], VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME) == 0)
                         {
-                            
+                            bDeviceGroupCreationExtension = true;
                         }
+                        if (strcmp(wantedInstanceExtensions[i], VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+                        {
+                            bDebugUtilsExtension = true;
+                        }
+                        ppInstanceExtensionCache[uExtensionCount++] = wantedInstanceExtensions[k];
+                        // 清理掉之后放置加载多次
+                        wantedInstanceExtensions[k] = "";
+                        break;
+                    }
+                }
+            }
+            JFREE(pProperties);
+        }
+
+        // 独立的扩展
+        {
+            const char* szLayerName = nullptr;
+            u32         uCount      = 0;
+            vkEnumerateInstanceExtensionProperties(szLayerName, &uCount, nullptr);
+            if (uCount > 0)
+            {
+                VkExtensionProperties* pProperties = (VkExtensionProperties*)JCALLOC(uCount, sizeof(VkExtensionProperties));
+                vkEnumerateInstanceExtensionProperties(szLayerName, &uCount, pProperties);
+                for (u32 k = 0; k < uWantedExtensionCount; ++k)
+                {
+                    if (strcmp(wantedInstanceExtensions[k], pProperties[j].extensionName) == 0)
+                    {
+                        if (strcmp(wantedInstanceExtensions[k], VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME) == 0)
+                        {
+                            bDeviceGroupCreationExtension = true;
+                        }
+                        if (strcmp(wantedInstanceExtensions[i], VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+                        {
+                            bDebugUtilsExtension = true;
+                        }
+                        ppInstanceExtensionCache[uExtensionCount++] = wantedInstanceExtensions[k];
+                        // 清理掉之后放置加载多次
+                        wantedInstanceExtensions[k] = "";
+                        break;
                     }
                 }
             }
         }
+        // #if VK_HEADER_VERSION >= 108
+        //         VkValidationFeaturesEXT      validationFreaturesExt     = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+        //         VkValidationFeatureEnableEXT enableValidationFeatures[] = {VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT};
+        //         if (pDesc->m_bEnableGPUBasedValidation)
+        //         {
+        //             validationFreaturesExt.enabledValidationFeatureCount = 1;
+        //             validationFreaturesExt.pEnabledValidationFeatures    = enableValidationFeatures;
+        //         }
+        // #endif
+        VkInstanceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        createInfo.flags = 0;
+        createInfo.pApplicationInfo = &appInfo;
+        createInfo.ppEnabledLayerNames = layerTemp.data();
+        createInfo.enabledExtensionCount = uExtensionCount;
+        createInfo.ppEnabledExtensionNames = ppInstanceExtensionCache;
+#if VK_HEADER_VERSION >= 108
+        VkValidationFeaturesEXT      validationFreaturesExt     = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+        VkValidationFeatureEnableEXT enableValidationFeatures[] = {VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT};
+        if (pDesc->m_bEnableGPUBasedValidation)
+        {
+            validationFreaturesExt.enabledValidationFeatureCount = 1;
+            validationFreaturesExt.pEnabledValidationFeatures    = enableValidationFeatures;
+        }
+#endif
+        JCHECK_VKRESULT(vkCreateInstance(&createInfo, &poolCreateInfo, &(pRenderer->Vulkan.m_vkInstance)));
     }
 }
 
