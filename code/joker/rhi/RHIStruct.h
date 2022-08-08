@@ -75,6 +75,18 @@ bool m_bEnableGPUBasedValidation;
 JDECL_RHI_STRUCT_END
 
 JDECL_RHI_STRUCT_ALIGNED_BEGIN(RHIRenderer, 64)
+struct RHINullDescriptors* m_pNullDescriptors;
+char*                      m_szName;
+struct RHIGPUSettings*     m_pActiveGpuSettings;
+struct RHIShaderMacro*     m_pBuiltinShaderDefines;
+struct RHIGPUCapBits*      m_pCapBits;
+u32                        m_uLinkedNodeCount         : 4;
+u32                        m_uUnlinkedRenderIndex     : 4;
+u32                        m_uGpuMode                 : 3;
+u32                        m_uShaderTarget            : 4;
+u32                        m_uEnableGpuBaseValidation : 1;
+char*                      szApiName;
+u32                        m_uBuiltinShaderDefinesCount;
 JDECL_RHI_STRUCT_END
 
 JDECL_RHI_STRUCT_BEGIN(RHICommandSignature)

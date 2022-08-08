@@ -78,3 +78,8 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 
 #define JLOG_LOGGER_CRITICAL(logger, ...) (void)0
 #define JLOG_CRITICAL(...)                (void)0
+
+#include <stdlib.h>
+#define JMALLOC(size)                              malloc(size)
+#define JMALLOC_ALIGNED(count, size, aligned_size) malloc(size)
+#define JCALLOC(count, size)                       calloc(count, size)
