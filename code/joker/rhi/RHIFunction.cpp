@@ -1,10 +1,18 @@
+#include "CoreType.h"
 #include "JokerRHIPCH.h"
 #include "RHIFunction.h"
 #include "RHIEnum.h"
 #include "RHIStruct.h"
 
-extern void RHIInitRendererContextVK();
-extern void RHIInitRendererContextNULL();
+extern void RHIInitRendererContextVK(const char* szAppName, const RHIRendererContextDesc* pSettings, RHIRendererContext** ppContext);
+extern void RHIInitRendererContextNULL(const char* szAppName, const RHIRendererContextDesc* pSettings, RHIRendererContext** ppContext);
+extern void RHIExitRendererContextVK(RHIRendererContext* pContext);
+extern void RHIExitRendererContextNULL(RHIRendererContext* pContext);
+
+extern void RHIInitRendererVK(const char* szAppName, const RHIRendererDesc* pSettings, RHIRenderer** ppRenderer);
+extern void RHIInitRendererNULL(const char* szAppName, const RHIRendererDesc* pSettings, RHIRenderer** pRenderer);
+extern void RHIExitRendererVK(RHIRenderer* pRenderer);
+extern void RHIExitRendererNULL(RHIRenderer* pRenderer);
 
 void        RHIInitRendererContext(const char* szAppName, const RHIRendererContextDesc* pSettings, RHIRendererContext** ppContext)
 {
@@ -16,21 +24,53 @@ void        RHIInitRendererContext(const char* szAppName, const RHIRendererConte
     case ERHIRenderer::Null:
         break;
     case ERHIRenderer::Vulkan:
-        RHIInitRendererContextVK();
+        RHIInitRendererContextVK(szAppName, pSettings, ppContext);
         break;
     }
 }
 
 void RHIExitRendererContext(RHIRendererContext* pContext)
 {
+    JASSERT(pContext);
+    switch(pContext->m_eRenderer)
+    {
+        case ERHIRenderer::Null:
+        break;
+        case ERHIRenderer::Vulkan:
+        RHIExitRendererContextVK(pContext);
+        break;
+        default:
+        JLOG_CRITICAL("exit render context no find api!");
+    }
 }
 
-void RHIInitRenderer(const char* szAppName, const RHIRendererDesc* pSettings, RHIRenderer* pRenderer)
+void RHIInitRenderer(const char* szAppName, const RHIRendererDesc* pSettings, RHIRenderer** ppRenderer)
 {
+    JASSERT(ppRenderer);
+    JASSERT(*ppRenderer==nullptr);
+    JASSERT(pSettings);
+
+    switch(pSettings->m_eRenderer)
+    {
+        case ERHIRenderer::Null:
+        break;
+        case ERHIRenderer::Vulkan:
+        RHIInitRendererVK(szAppName, pSettings, ppRenderer);
+        break;
+    }
 }
 
 void RHIExitRenderer(RHIRenderer* pRenderer)
 {
+    JASSERT(pRenderer);
+    switch(pRenderer->m_eRenderer)
+    {
+        case ERHIRenderer::Null:
+        break;
+        case ERHIRenderer::Vulkan:
+        RHIExitRendererVK(pRenderer);
+        break;
+    }
 }
 
 JIMPL_RHI_FUNC(void, RHIAddFence, RHIRenderer* pRenderer, RHIFence** ppFence)

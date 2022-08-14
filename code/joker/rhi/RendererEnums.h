@@ -1,5 +1,6 @@
 #pragma once
 
+namespace joker::rhi {
 #define JMAKE_ENUM_FLAG(ENUM_TYPE)                                                                                                                   \
     static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b)                                                                                      \
     {                                                                                                                                                \
@@ -46,7 +47,7 @@
         return e != (ENUM_TYPE)0;                                                                                                                    \
     }
 
-enum class ERHIRenderer
+enum class ERenderer
 {
 #if JOPTION_RHI_NULL
     Null,
@@ -56,7 +57,7 @@ enum class ERHIRenderer
 #endif
 };
 
-enum class ERHITextureCreationFlags
+enum class ETextureCreationFlags
 {
     None               = 0_bit,  // Default flag (Texture will use default allocation strategy decided by the api specific allocator)
     OwnMemoryBit       = 1_bit,  // Texture will allocate its own memory (COMMITTED resource)
@@ -77,7 +78,7 @@ enum class ERHITextureCreationFlags
     VRFoveatedRendering = 16_bit, // Binds the FFR fragment density if this texture is used as a render target.
 };
 
-enum class ERHIWaveOpsSupportFlags
+enum class EWaveOpsSupportFlags
 {
     None               = 0_bit,
     BasicBit           = 1_bit,
@@ -91,9 +92,9 @@ enum class ERHIWaveOpsSupportFlags
     PartitionedBitNV   = 9_bit,
     All                = 0x7FFFFFFF,
 };
-JMAKE_ENUM_FLAG(ERHIWaveOpsSupportFlags);
+JMAKE_ENUM_FLAG(EWaveOpsSupportFlags);
 
-enum class ERHIGPUPresetLevel
+enum class EGPUPresetLevel
 {
     None = 0,
     Office,
@@ -104,7 +105,7 @@ enum class ERHIGPUPresetLevel
     Count,
 };
 
-enum class ERHIShadingRate
+enum class EShadingRate
 {
     NotSupported = 0_bit,
     Full         = 1_bit,
@@ -117,14 +118,14 @@ enum class ERHIShadingRate
     _4X2         = 8_bit,
 };
 
-enum class ERHIShadingRateCaps
+enum class EShadingRateCaps
 {
     NotSupported = 0_bit,
     PerDraw      = 1_bit,
     PerTile      = 2_bit,
 };
 
-enum class ERHIGPUVendor
+enum class EGPUVendor
 {
     Nvidia,
     Amd,
@@ -133,7 +134,7 @@ enum class ERHIGPUVendor
     Count,
 };
 
-enum class ERHITextureDimension
+enum class ETextureDimension
 {
     D1,
     D2,
@@ -148,14 +149,14 @@ enum class ERHITextureDimension
     Undefined,
 };
 
-enum class ERHIGPUMode
+enum class EGPUMode
 {
     Single = 0,
     Linked,
     Unlinked,
 };
 
-enum class ERHIShaderMode
+enum class EShaderMode
 {
     _5_0,
     _5_1,
@@ -167,8 +168,8 @@ enum class ERHIShaderMode
 };
 
 // 临时的，这些参数大部分应该从gpu信息里取出来
-struct RHIConst
-{
+// struct RHIConst
+// {
     constexpr static n32 kMaxInstanceExtensions      = 64;
     constexpr static n32 kMaxDeviceExtensions        = 64;
     constexpr static n32 kMaxLinkedGPUs              = 4;
@@ -183,4 +184,5 @@ struct RHIConst
     constexpr static n32 kMaxSwapChainImages         = 3;
     constexpr static n32 kMaxGPUVendorStringLength   = 256;
     constexpr static n32 kMaxPlaneCount              = 3;
-};
+// };
+}
