@@ -73,7 +73,7 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 #define JLOG_WARN(...)                    SPDLOG_WARN(__VA_ARGS__)
 
 #define JLOG_LOGGER_ERROR(logger, ...)    SPDLOG_LOGGER_ERROR(logger,__VA_ARGS__)
-#define JLOG_ERROR(...)                   SPDLOG_ERROR(logger,__VA_ARGS__)
+#define JLOG_ERROR(...)                   SPDLOG_ERROR(__VA_ARGS__)
 
 #define JLOG_LOGGER_CRITICAL(logger, ...) SPDLOG_LOGGER_CRITICAL(logger,__VA_ARGS__)
 #define JLOG_CRITICAL(...)                SPDLOG_CRITICAL(__VA_ARGS__)

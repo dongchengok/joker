@@ -9,7 +9,8 @@ struct RendererContextDesc
 {
     const char* m_szAppName;
     ERenderer   m_eRenderer;
-    bool        m_bbEnableValidation;
+    bool        m_bEnableDebugUtilsMessager;
+    bool        m_bEnableValidation;
     bool        m_bEnableGPUBasedValidation;
 };
 
@@ -25,6 +26,7 @@ struct RendererDesc
 JDECL_RHI_STRUCT_BEGIN(RendererContext)
 ERenderer m_eRenderer;
 bool      m_bEnableGPUBasedValidation;
+bool      m_bSupportGroupCreation;
 JDECL_RHI_STRUCT_END
 
 JDECL_RHI_STRUCT_BEGIN(Renderer)

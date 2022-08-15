@@ -56,6 +56,8 @@ int main(int argc, char *argv[])
 
     joker::rhi::RendererContextDesc desc{};
     desc.m_eRenderer = joker::rhi::ERenderer::Vulkan;
+    desc.m_bEnableDebugUtilsMessager = true;
+    desc.m_bEnableValidation = true;
     joker::rhi::InitRendererContext(&desc);
 
     VulkanEngine engine;
