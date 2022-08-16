@@ -24,30 +24,52 @@ constexpr static const char* kDeviceExtensions[] = {
     "",
 };
 
-//TODO
+// TODO
 constexpr static VkAllocationCallbacks* kAllocator = nullptr;
 
-static bool _vkCheckValidationLayer(const char* szName, u32 uCount, const VkLayerProperties* pLayers)
+// 检查版本号
+static bool _vkCheckVersion(u32 uNeedVersion)
 {
-    for (u32 i = 0; i < uCount; ++i)
+    u32 uVersion;
+    vkEnumerateInstanceVersion(&uVersion);
+    if (uVersion >= uNeedVersion)
     {
-        if (strcmp(szName, pLayers[i].layerName))
-        {
-            return true;
-        }
+        return true;
     }
+    JLOG_ERROR("need version:{}.{}.{}.{} but only:{}.{}.{}.{}", VK_API_VERSION_VARIANT(uNeedVersion), VK_API_VERSION_MAJOR(uNeedVersion),
+               VK_API_VERSION_MINOR(uNeedVersion), VK_API_VERSION_PATCH(uNeedVersion), VK_API_VERSION_VARIANT(uVersion),
+               VK_API_VERSION_MAJOR(uVersion), VK_API_VERSION_MINOR(uVersion), VK_API_VERSION_PATCH(uVersion));
     return false;
 }
 
-static bool _vkCheckValidationExtension(const char* szName, u32 uCount, const VkExtensionProperties* pExts)
+// 检查验证层
+static bool _vkCheckNAddValidationLayer(const char* szName, u32 uCount, const VkLayerProperties* pLayers, u32* pUsedCount,
+                                        const char** ppUsedValidationLayers)
 {
     for (u32 i = 0; i < uCount; ++i)
     {
-        if (strcmp(szName, pExts[i].extensionName))
+        if (strcmp(szName, pLayers[i].layerName) == 0)
         {
+            ppUsedValidationLayers[(*pUsedCount)++] = pLayers[i].layerName;
             return true;
         }
     }
+    JLOG_WARN("can not find layer {}", szName);
+    return false;
+}
+
+// 检查扩展
+static bool _vkCheckNAddExtension(const char* szName, u32 uCount, const VkExtensionProperties* pExts, u32* pUsedCount, const char** ppUsedExtensions)
+{
+    for (u32 i = 0; i < uCount; ++i)
+    {
+        if (strcmp(szName, pExts[i].extensionName) == 0)
+        {
+            ppUsedExtensions[(*pUsedCount)++] = pExts[i].extensionName;
+            return true;
+        }
+    }
+    JLOG_WARN("can not find extension {}", szName);
     return false;
 }
 
@@ -75,69 +97,64 @@ static VkBool32 VKAPI_PTR _vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeve
     return VK_FALSE;
 }
 
-static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation, bool bEnableDebugUtilsMessager)
+static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation, bool bEnableGPUBasedValidation, bool bEnableDebugUtilsMessager)
 {
     JCHECK_RHI_RESULT(volkInitialize());
-
-    // const char** ppInstanceLayers    = (const char**)JALLOC(2 + sizeof(char*));
-    // u32          uInstanceLayerCount = 0;
-    // if (bEnableValidation)
-    // {
-    //     ppInstanceLayers[uInstanceLayerCount++] = "VK_LAYER_KHRONOS_validation";
-    // }
-    // const char* pInstanceExtensionCache[256] = {};
 
     // 检查包含哪些layer
     u32 uLayerCount{0};
     vkEnumerateInstanceLayerProperties(&uLayerCount, nullptr);
-    VkLayerProperties* pLayers = (VkLayerProperties*)JALLOC(sizeof(VkLayerProperties) * uLayerCount);
-    const char** ppLayerNames = (const char**)JALLOC(sizeof(char*)*uLayerCount);
-    u32 uInstanceLayerCount = 0;
+    VkLayerProperties* pLayers          = (VkLayerProperties*)JALLOC(sizeof(VkLayerProperties) * uLayerCount);
+    const char**       ppUsedLayerNames = (const char**)JALLOC(sizeof(char*) * uLayerCount);
+    u32                uUsedLayerCount  = 0;
     vkEnumerateInstanceLayerProperties(&uLayerCount, pLayers);
     for (u32 i = 0; i < uLayerCount; ++i)
     {
         JLOG_INFO("VkLayerProperties {}: {}", i, pLayers[i].layerName);
     }
 
+    if (bEnableValidation)
+    {
+        _vkCheckNAddValidationLayer("VK_LAYER_KHRONOS_validation", uLayerCount, pLayers, &uUsedLayerCount, ppUsedLayerNames);
+        _vkCheckNAddValidationLayer("VK_LAYER_LUNARG_monitor", uLayerCount, pLayers, &uUsedLayerCount, ppUsedLayerNames);
+    }
+
     // 检查包含哪些扩展
     u32 uExtCount{0};
     vkEnumerateInstanceExtensionProperties(nullptr, &uExtCount, nullptr);
-    VkExtensionProperties* pExts = (VkExtensionProperties*)JALLOC(sizeof(VkExtensionProperties) * uExtCount);
-    const char** ppExtensionNames = (const char**)JALLOC(sizeof(char*)*uExtCount);
-    u32 uInstanceExtensionCount = 0;
+    VkExtensionProperties* pExts                = (VkExtensionProperties*)JALLOC(sizeof(VkExtensionProperties) * uExtCount);
+    const char**           ppUsedExtensionNames = (const char**)JALLOC(sizeof(char*) * uExtCount);
+    u32                    uUsedExtensionCount  = 0;
     vkEnumerateInstanceExtensionProperties(NULL, &uExtCount, pExts);
     for (u32 i = 0; i < uExtCount; ++i)
     {
         JLOG_INFO("VkLayerProperties {}: {}", i, pExts[i].extensionName);
     }
 
-    if (bEnableValidation && !_vkCheckValidationLayer("VK_LAYER_KHRONOS_validation", uLayerCount, pLayers))
+    if (bEnableDebugUtilsMessager)
     {
-        //TODO 这俩都应该抽成函数
-        JLOG_WARN("can not find layer VK_LAYER_KHRONOS_validation!");
-    }
-    else
-    {
-        static auto aaa = "VK_LAYER_KHRONOS_validation";
-        ppLayerNames[uInstanceLayerCount++] = aaa;
+        _vkCheckNAddExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, uExtCount, pExts, &uUsedExtensionCount, ppUsedExtensionNames);
     }
 
-    if (bEnableDebugUtilsMessager && !_vkCheckValidationExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, uExtCount, pExts))
-    {
-        JLOG_WARN("can not find layer {}", VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-    else
-    {
-        static auto aaa = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-        ppExtensionNames[uInstanceExtensionCount++] = aaa;
-    }
+    _vkCheckVersion(VK_VERSION_1_1);
 
-    // 检查版本号
-    u32 version;
-    vkEnumerateInstanceVersion(&version);
-    u32               uMajor = VK_API_VERSION_MAJOR(version);
-    u32               uMinor = VK_API_VERSION_MINOR(version);
-    u32               uPatch = VK_API_VERSION_PATCH(version);
+    // feature开关
+    VkValidationFeaturesEXT validationFeaturesExt{};
+    validationFeaturesExt.sType                              = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+    validationFeaturesExt.pNext                              = nullptr;
+    validationFeaturesExt.enabledValidationFeatureCount      = 0;
+    validationFeaturesExt.pEnabledValidationFeatures         = nullptr;
+    validationFeaturesExt.disabledValidationFeatureCount     = 0;
+    validationFeaturesExt.pDisabledValidationFeatures        = nullptr;
+    VkValidationFeatureEnableEXT enabledValidationFeatures[] = {
+        VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+    };
+
+    if (bEnableGPUBasedValidation)
+    {
+        validationFeaturesExt.enabledValidationFeatureCount = 1;
+        validationFeaturesExt.pEnabledValidationFeatures    = enabledValidationFeatures;
+    }
 
     VkApplicationInfo appInfo{};
     appInfo.sType            = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -150,13 +167,13 @@ static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation,
     VkInstance           instance;
     VkInstanceCreateInfo createInfo{};
     createInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pNext                   = nullptr;
+    createInfo.pNext                   = &validationFeaturesExt;
     createInfo.flags                   = 0;
     createInfo.pApplicationInfo        = &appInfo;
-    createInfo.enabledLayerCount       = uInstanceLayerCount;
-    createInfo.ppEnabledLayerNames     = uInstanceLayerCount?ppLayerNames:nullptr;
-    createInfo.enabledExtensionCount   = uInstanceExtensionCount;
-    createInfo.ppEnabledExtensionNames = uInstanceExtensionCount?ppExtensionNames:nullptr;
+    createInfo.enabledLayerCount       = uUsedLayerCount;
+    createInfo.ppEnabledLayerNames     = uUsedLayerCount ? ppUsedLayerNames : nullptr;
+    createInfo.enabledExtensionCount   = uUsedExtensionCount;
+    createInfo.ppEnabledExtensionNames = uUsedExtensionCount ? ppUsedExtensionNames : nullptr;
     JCHECK_RHI_RESULT(vkCreateInstance(&createInfo, nullptr, &instance));
 
     // 必须加载instance的接口
@@ -176,7 +193,7 @@ static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation,
 
         VkDebugUtilsMessengerEXT messager;
         JCHECK_RHI_RESULT(vkCreateDebugUtilsMessengerEXT(instance, &debugInfo, kAllocator, &messager));
-        int a = 0;
+        //TODO messager传出去
     }
 
     return instance;
@@ -184,7 +201,8 @@ static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation,
 
 RendererContext* vkInitRendererContext(const RendererContextDesc* pDesc)
 {
-    VkInstance hVkInstance = _vkInitInstance(pDesc->m_szAppName, pDesc->m_bEnableValidation, pDesc->m_bEnableDebugUtilsMessager);
+    VkInstance hVkInstance =
+        _vkInitInstance(pDesc->m_szAppName, pDesc->m_bEnableValidation, pDesc->m_bEnableGPUBasedValidation, pDesc->m_bEnableDebugUtilsMessager);
     JASSERT(hVkInstance);
     return nullptr;
 }
