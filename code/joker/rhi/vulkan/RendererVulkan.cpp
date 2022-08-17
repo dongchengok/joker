@@ -1,5 +1,6 @@
 #include "JokerRHIPCH.h"
 #include "RendererVulkan.h"
+#include "RendererPrivateVulkan.h"
 #include "RendererInit.h"
 
 namespace joker::rhi::vulkan
@@ -97,7 +98,7 @@ static VkBool32 VKAPI_PTR _vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeve
     return VK_FALSE;
 }
 
-static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation, bool bEnableGPUBasedValidation, bool bEnableDebugUtilsMessager)
+static VkInstance _vkCreateInstance(const char* szAppName, bool bEnableValidation, bool bEnableGPUBasedValidation, bool bEnableDebugUtilsMessager)
 {
     JCHECK_RHI_RESULT(volkInitialize());
 
@@ -138,7 +139,7 @@ static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation,
 
     _vkCheckVersion(VK_VERSION_1_1);
 
-    // feature开关
+    // feature开关，是否允许校验层检查gpu错误
     VkValidationFeaturesEXT validationFeaturesExt{};
     validationFeaturesExt.sType                              = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
     validationFeaturesExt.pNext                              = nullptr;
@@ -149,7 +150,6 @@ static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation,
     VkValidationFeatureEnableEXT enabledValidationFeatures[] = {
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
     };
-
     if (bEnableGPUBasedValidation)
     {
         validationFeaturesExt.enabledValidationFeatureCount = 1;
@@ -193,27 +193,64 @@ static VkInstance _vkInitInstance(const char* szAppName, bool bEnableValidation,
 
         VkDebugUtilsMessengerEXT messager;
         JCHECK_RHI_RESULT(vkCreateDebugUtilsMessengerEXT(instance, &debugInfo, kAllocator, &messager));
-        //TODO messager传出去
+        // TODO messager传出去
     }
 
     return instance;
 }
 
+
+
 RendererContext* vkInitRendererContext(const RendererContextDesc* pDesc)
 {
     VkInstance hVkInstance =
-        _vkInitInstance(pDesc->m_szAppName, pDesc->m_bEnableValidation, pDesc->m_bEnableGPUBasedValidation, pDesc->m_bEnableDebugUtilsMessager);
+        _vkCreateInstance(pDesc->m_szAppName, pDesc->m_bEnableValidation, pDesc->m_bEnableGPUBasedValidation, pDesc->m_bEnableDebugUtilsMessager);
     JASSERT(hVkInstance);
     return nullptr;
 }
 
 void vkExitRendererContext(RendererContext* pContext)
 {
-    VkResult a;
+    if (pContext->Vulkan.m_hVkDebugMessenger)
+    {
+        vkDestroyDebugUtilsMessengerEXT(pContext->Vulkan.m_hVkInstance, pContext->Vulkan.m_hVkDebugMessenger,
+                                        pContext->Vulkan.m_pVkAllocationCallbacks);
+    }
+    vkDestroyInstance(pContext->Vulkan.m_hVkInstance, pContext->Vulkan.m_pVkAllocationCallbacks);
+    JFREE(pContext);
 }
 
 Renderer* vkInitRenderer(const RendererDesc* pDesc)
 {
+    u8*           pMem        = (u8*)JCALLOC_ALIGNED(1, alignof(Renderer*), sizeof(Renderer) + sizeof(NullDescriptors));
+    JASSERT(pMem);
+
+    Renderer* pRenderer                   = (Renderer*)pMem;
+    pRenderer->m_eGPUMode                 = pDesc->m_eGPUMode;
+    pRenderer->m_eShaderMode              = pDesc->m_eShaderMode;
+    pRenderer->m_bEnableGpuBaseValidation = pDesc->m_bEnableGPUBaseValidation;
+    pRenderer->m_pNullDescriptors         = (NullDescriptors*)(pMem + sizeof(Renderer));
+
+    // pRenderer->m_szName = (char*)JCALLOC(strlen(pDesc.sz))
+
+    //如果是unlinked模式，就必须有RendererContext
+    JASSERT(pDesc->m_eGPUMode != EGPUMode::Unlinked || pDesc);
+    if (pDesc->m_pRenderContext)
+    {
+        pRenderer->Vulkan.m_hVkInstance       = pDesc->m_pRenderContext->Vulkan.m_hVkInstance;
+        pRenderer->Vulkan.m_bOwnInstance      = false;
+        pRenderer->Vulkan.m_hVkDebugMessenger = pDesc->m_pRenderContext->Vulkan.m_hVkDebugMessenger;
+        // TODO
+        pRenderer->Vulkan.m_uDeviceIndex = 0;
+    }
+    else
+    {
+        pRenderer->Vulkan.m_hVkInstance =
+            _vkCreateInstance(pDesc->m_szAppName, pDesc->m_bEnableValidation, pDesc->m_bEnableGPUBaseValidation, pDesc->m_bEnableDebugUtilsMessager);
+        JASSERT(pRenderer->Vulkan.m_hVkInstance);
+        pRenderer->Vulkan.m_bOwnInstance = true;
+    }
+
     return nullptr;
 }
 

@@ -1,7 +1,6 @@
 #pragma once
 
 namespace joker::rhi {
-struct NullDescriptors;
 struct GPUSettings;
 struct GPUCapBits;
 struct ShaderMacro;
