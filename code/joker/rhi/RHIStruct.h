@@ -2,7 +2,6 @@
 
 #include "CoreType.h"
 #include "RHIEnum.h"
-#include "RHIStruct.h"
 #include "RHIType.h"
 #if (defined(JOPTION_RHI_MULTI) && JOPTION_RHI_NULL) || (JOPTION_RHI_API == JOPTION_RHI_NULL)
 #include "null/RHIStructNull.h"

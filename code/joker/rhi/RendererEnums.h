@@ -1,6 +1,7 @@
 #pragma once
 
-namespace joker::rhi {
+namespace joker::rhi
+{
 #define JMAKE_ENUM_FLAG(ENUM_TYPE)                                                                                                                   \
     static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b)                                                                                      \
     {                                                                                                                                                \
@@ -105,6 +106,27 @@ enum class EGPUPresetLevel
     Count,
 };
 
+inline const char* EGPUPresetLevelToString(EGPUPresetLevel ePreset)
+{
+    switch (ePreset)
+    {
+    case EGPUPresetLevel::None:
+        return "";
+    case EGPUPresetLevel::Office:
+        return "office";
+    case EGPUPresetLevel::Low:
+        return "low";
+    case EGPUPresetLevel::Medium:
+        return "medium";
+    case EGPUPresetLevel::High:
+        return "high";
+    case EGPUPresetLevel::Ultra:
+        return "ultra";
+    default:
+        return NULL;
+    }
+}
+
 enum class EShadingRate
 {
     NotSupported = 0_bit,
@@ -163,26 +185,26 @@ enum class EShaderMode
     _6_0,
     _6_1,
     _6_2,
-    _6_3,           //光追需要
-    _6_4,           //VRS需要
+    _6_3, //光追需要
+    _6_4, // VRS需要
 };
 
 // 临时的，这些参数大部分应该从gpu信息里取出来
 // struct RHIConst
 // {
-    constexpr static n32 kMaxInstanceExtensions      = 64;
-    constexpr static n32 kMaxDeviceExtensions        = 64;
-    constexpr static n32 kMaxLinkedGPUs              = 4;
-    constexpr static n32 kMaxUnlinkedGPUs            = 4;
-    constexpr static n32 kMaxMultipleGPUs            = 4;
-    constexpr static n32 kMaxRenderTargetAttachments = 8;
-    constexpr static n32 kMaxVertexBindings          = 15;
-    constexpr static n32 kMaxVertexAttribs           = 15;
-    constexpr static n32 kMaxResourceNameLength      = 256;
-    constexpr static n32 kMaxSemanticNameLength      = 128;
-    constexpr static n32 kMaxDebugNameLength         = 128;
-    constexpr static n32 kMaxSwapChainImages         = 3;
-    constexpr static n32 kMaxGPUVendorStringLength   = 256;
-    constexpr static n32 kMaxPlaneCount              = 3;
+constexpr static n32 kMaxInstanceExtensions      = 64;
+constexpr static n32 kMaxDeviceExtensions        = 64;
+constexpr static n32 kMaxLinkedGPUs              = 4;
+constexpr static n32 kMaxUnlinkedGPUs            = 4;
+constexpr static n32 kMaxMultipleGPUs            = 4;
+constexpr static n32 kMaxRenderTargetAttachments = 8;
+constexpr static n32 kMaxVertexBindings          = 15;
+constexpr static n32 kMaxVertexAttribs           = 15;
+constexpr static n32 kMaxResourceNameLength      = 256;
+constexpr static n32 kMaxSemanticNameLength      = 128;
+constexpr static n32 kMaxDebugNameLength         = 128;
+constexpr static n32 kMaxSwapChainImages         = 3;
+constexpr static n32 kMaxGPUVendorStringLength   = 256;
+constexpr static n32 kMaxPlaneCount              = 3;
 // };
 }

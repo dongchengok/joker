@@ -56,9 +56,12 @@ int main(int argc, char *argv[])
 
     joker::rhi::RendererContextDesc desc{};
     desc.m_eRenderer = joker::rhi::ERenderer::Vulkan;
-    desc.m_bEnableDebugUtilsMessager = true;
-    desc.m_bEnableValidation = true;
-    joker::rhi::InitRendererContext(&desc);
+    desc.m_bDebug = true;
+    desc.m_bGPUDebug = false;
+    desc.m_szAppName = "test";
+    memset(&desc.Vulkan,0,sizeof(desc.Vulkan));
+    joker::rhi::RendererContext* pContext{};
+    joker::rhi::InitRendererContext(&desc,&pContext);
 
     VulkanEngine engine;
 
@@ -67,6 +70,8 @@ int main(int argc, char *argv[])
     engine.run();
 
     engine.cleanup();
+
+    joker::rhi::ExitRendererContext(pContext);
 
     return 0;
 }

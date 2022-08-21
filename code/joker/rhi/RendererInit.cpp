@@ -5,17 +5,25 @@
 namespace joker::rhi
 {
 
-RendererContext* InitRendererContext(const RendererContextDesc* pDesc)
+namespace vulkan
+{
+extern void _vkInitRendererContext(const RendererContextDesc* pDesc, RendererContext** ppContext);
+extern void _vkExitRendererContext(RendererContext* pContext);
+extern void _vkInitRenderer(const RendererDesc* pDesc, Renderer** ppRenderer);
+extern void _vkExitRenderer(Renderer* pRenderer);
+}
+
+void InitRendererContext(const RendererContextDesc* pDesc, RendererContext** ppContext)
 {
     JASSERT(pDesc);
     switch (pDesc->m_eRenderer)
     {
     case ERenderer::Vulkan:
-        return vulkan::vkInitRendererContext(pDesc);
+        vulkan::_vkInitRendererContext(pDesc, ppContext);
+        return;
     default:
         JASSERT(false);
     }
-    return nullptr;
 }
 
 void ExitRendererContext(RendererContext* pContext)
@@ -24,35 +32,35 @@ void ExitRendererContext(RendererContext* pContext)
     switch (pContext->m_eRenderer)
     {
     case ERenderer::Vulkan:
-        vulkan::vkExitRendererContext(pContext);
+        vulkan::_vkExitRendererContext(pContext);
         return;
     default:
         JASSERT(false);
     }
 }
 
-Renderer* InitRenderer(const RendererDesc* pDesc)
+void InitRenderer(const RendererDesc* pDesc, Renderer** ppRenderer)
 {
     JASSERT(pDesc);
-    switch(pDesc->m_eRenderer)
+    switch (pDesc->m_eRenderer)
     {
-        case ERenderer::Vulkan:
-        return vulkan::vkInitRenderer(pDesc);
-        default:
+    case ERenderer::Vulkan:
+        vulkan::_vkInitRenderer(pDesc, ppRenderer);
+        return;
+    default:
         JASSERT(false);
     }
-    return nullptr;
 }
 
 void ExitRenderer(Renderer* pRenderer)
 {
     JASSERT(pRenderer);
-    switch(pRenderer->m_eRenderer)
+    switch (pRenderer->m_eRenderer)
     {
-        case ERenderer::Vulkan:
-        vulkan::vkExitRenderer(pRenderer);
+    case ERenderer::Vulkan:
+        vulkan::_vkExitRenderer(pRenderer);
         return;
-        default:
+    default:
         JASSERT(false);
     }
 }

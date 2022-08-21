@@ -571,7 +571,7 @@ void RHIInitRendererContextVK(const char* szAppName, const RHIRendererContextDes
     {
         return;
     }
-    RHIRendererContext* pContext             = (RHIRendererContext*)JMALLOC_ALIGNED(1, alignof(RHIRendererContext), sizeof(RHIRenderContext));
+    RHIRendererContext* pContext             = (RHIRendererContext*)JMALLOC_ALIGNED(1, alignof(RHIRendererContext), sizeof(RHIRendererContext));
     pContext->Vulkan.m_hVkInstance           = fakeRenderer.Vulkan.m_hVkInstance;
     pContext->Vulkan.m_hVkDebugUtilsMessager = fakeRenderer.Vulkan.m_hVkDebugUtilsMessenger;
 
@@ -587,8 +587,8 @@ void RHIInitRendererContextVK(const char* szAppName, const RHIRendererContextDes
     JCHECK_VKRESULT(vkEnumeratePhysicalDevices(pContext->Vulkan.m_hVkInstance, &uGPUCount, pGPUs));
 
     // 由于个数不确定，又要在栈上分配，所以用alloca分配速度最快
-    RHIGPUSettings* pGPUSettings  = (RHIGPUSettings*)JALLOC(uGPUCount * sizeof(RHIGPUSettings));
-    bool*           pGPUValid     = (bool*)JALLOC(uGPUCount * sizeof(bool));
+    RHIGPUSettings* pGPUSettings  = (RHIGPUSettings*)JALLOCA(uGPUCount * sizeof(RHIGPUSettings));
+    bool*           pGPUValid     = (bool*)JALLOCA(uGPUCount * sizeof(bool));
     u32             uRealGPUCount = 0;
     for (u32 i = 0; i < uGPUCount; ++i)
     {
