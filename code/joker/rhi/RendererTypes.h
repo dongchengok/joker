@@ -14,7 +14,7 @@ struct RendererContext;
 struct RendererDesc;
 struct Renderer;
 
-typedef struct GPUVendorPreset
+struct GPUVendorPreset
 {
     EGPUPresetLevel m_ePresetLevel;
     char            m_szVendorId[JMAX_NAME_LENGTH];
@@ -23,7 +23,7 @@ typedef struct GPUVendorPreset
     char            m_szGPUName[JMAX_NAME_LENGTH];    // If GPU Name is missing then value will be empty string
     char            m_szGPUDriverVersion[JMAX_NAME_LENGTH];
     char            m_szGPUDriverDate[JMAX_NAME_LENGTH];
-} GPUVendorPreset;
+};
 
 struct GPUSettings
 {
@@ -60,18 +60,19 @@ JDECL_RHI_STRUCT_END
 
 JDECL_RHI_STRUCT_BEGIN(RendererContext)
 ERenderer m_eRenderer;
-u32       m_uGPUCount;
 GPUInfo*  m_pGPUs;
+u32       m_uGPUCount;
+u32       m_uRendererCount;
 JDECL_RHI_STRUCT_END
 
 JDECL_RHI_STRUCT_BEGIN(RendererDesc)
-const char*      m_szAppName;
+const char*      m_szName;
+GPUSettings*     m_pActiveGPUSettings;
 ERenderer        m_eRenderer;
 EShaderMode      m_eShaderMode;
 EGPUMode         m_eGPUMode;
-bool             m_bEnableDebugUtilsMessager;
-bool             m_bEnableValidation;
-bool             m_bEnableGPUBaseValidation;
+bool             m_bDebug;
+bool             m_bGPUDebug;
 RendererContext* m_pRenderContext;
 u32              m_uGPUIndex;
 JDECL_RHI_STRUCT_END
@@ -96,17 +97,17 @@ struct NullDescriptors
 };
 
 JDECL_RHI_STRUCT_BEGIN(Renderer)
+RendererContext*    m_pContext;
 NullDescriptors*    m_pNullDescriptors;
 char*               m_szName;
+char*               m_szApiName;
 struct GPUSettings* m_pActiveGpuSettings;
 struct ShaderMacro* m_pBuiltinShaderDefines;
 struct GPUCapBits*  m_pCapBits;
-u32                 m_uLinkedNodeCount         : 4;
-u32                 m_uUnlinkedRenderIndex     : 4;
-EGPUMode            m_eGPUMode                 : 3;
-EShaderMode         m_eShaderMode              : 4;
-bool                m_bEnableGpuBaseValidation : 1;
-char*               szApiName;
+u32                 m_uLinkedNodeCount     : 4;
+u32                 m_uUnlinkedRenderIndex : 4;
+EGPUMode            m_eGPUMode             : 4;
+EShaderMode         m_eShaderMode          : 4;
 u32                 m_uBuiltinShaderDefinesCount;
 ERenderer           m_eRenderer;
 JDECL_RHI_STRUCT_END

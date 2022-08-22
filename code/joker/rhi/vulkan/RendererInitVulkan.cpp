@@ -174,6 +174,15 @@ static VkBool32 VKAPI_PTR _vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeve
     return VK_FALSE;
 }
 
+static bool _vkSelectBestGPU(Renderer* pRenderer)
+{
+    u32 uGPUCount = 0;
+    JCHECK_RHI_RESULT(vkEnumeratePhysicalDevices(pRenderer->m_pContext->Vulkan.m_hVkInstance, &uGPUCount, nullptr));
+    JASSERT(uGPUCount>0);
+
+    
+}
+
 static void _vkCreateInstance(const RendererContextDesc* pDesc, RendererContext* pContext)
 {
     JCHECK_RHI_RESULT(volkInitialize());
@@ -187,6 +196,11 @@ static void _vkCreateInstance(const RendererContextDesc* pDesc, RendererContext*
     for (u32 i = 0; i < pContext->Vulkan.m_uSupportLayersCount; ++i)
     {
         JLOG_INFO("VkLayerProperties {}: {}", i, pContext->Vulkan.m_pSupportLayers[i].layerName);
+    }
+    for (u32 i = 0; i < pDesc->Vulkan.m_uNeedLayersCount; ++i)
+    {
+        _vkCheckNAddValidationLayer(pDesc->Vulkan.m_ppNeedLayers[i], pContext->Vulkan.m_uSupportLayersCount, pContext->Vulkan.m_pSupportLayers,
+                                    &pContext->Vulkan.m_uUsedLayersCount, pContext->Vulkan.m_ppUsedLayers);
     }
     if (pDesc->m_bDebug)
     {
@@ -206,6 +220,11 @@ static void _vkCreateInstance(const RendererContextDesc* pDesc, RendererContext*
     for (u32 i = 0; i < pContext->Vulkan.m_uSupportExtensionsCount; ++i)
     {
         JLOG_INFO("VkExtensionProperties {}: {}", i, pContext->Vulkan.m_pSupportExtensions[i].extensionName);
+    }
+    for (u32 i = 0; i < pDesc->Vulkan.m_uNeedExtensionsCount; ++i)
+    {
+        _vkCheckNAddExtension(pDesc->Vulkan.m_ppNeedExtensions[i], pContext->Vulkan.m_uSupportExtensionsCount, pContext->Vulkan.m_pSupportExtensions,
+                              &pContext->Vulkan.m_uUsedExtensionsCount, pContext->Vulkan.m_ppUsedExtensions);
     }
     if (pDesc->m_bDebug)
     {
@@ -346,11 +365,13 @@ static void _vkQueryGPUProperties(VkPhysicalDevice gpu, VkPhysicalDeviceProperti
         secondaryBranch = (pGPUProperties->properties.driverVersion >> 6) & 0x0ff;
         tertiaryBranch  = (pGPUProperties->properties.driverVersion) & 0x003f;
 
-        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u.%u", major, minor, secondaryBranch, tertiaryBranch);
+        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u.%u", major, minor, secondaryBranch,
+                  tertiaryBranch);
         break;
     default:
-        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u", VK_VERSION_MAJOR(pGPUProperties->properties.driverVersion),
-                VK_VERSION_MINOR(pGPUProperties->properties.driverVersion), VK_VERSION_PATCH(pGPUProperties->properties.driverVersion));
+        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u",
+                  VK_VERSION_MAJOR(pGPUProperties->properties.driverVersion), VK_VERSION_MINOR(pGPUProperties->properties.driverVersion),
+                  VK_VERSION_PATCH(pGPUProperties->properties.driverVersion));
         break;
     }
 
@@ -414,17 +435,66 @@ static void _vkInitGPUInfos(RendererContext* pContext)
         pContext->m_pGPUs[realGpu].Vulkan.m_GPUProperties       = pGPUProperties[i];
         pContext->m_pGPUs[realGpu].Vulkan.m_GPUProperties.pNext = NULL;
 
-        JLOG_INFO("GPU[{}] detected. Vendor ID:{}, Model ID: {}, Preset: {}, GPU Name: {}, driver version: {}", realGpu, pGPUSettings[i].m_GPUVendorPreset.m_szVendorId,
-                  pGPUSettings[i].m_GPUVendorPreset.m_szModelId, EGPUPresetLevelToString(pGPUSettings[i].m_GPUVendorPreset.m_ePresetLevel),
-                  pGPUSettings[i].m_GPUVendorPreset.m_szGPUName, pGPUSettings[i].m_GPUVendorPreset.m_szGPUDriverVersion);
+        JLOG_INFO("GPU[{}] detected. Vendor ID:{}, Model ID: {}, Preset: {}, GPU Name: {}, driver version: {}", realGpu,
+                  pGPUSettings[i].m_GPUVendorPreset.m_szVendorId, pGPUSettings[i].m_GPUVendorPreset.m_szModelId,
+                  EGPUPresetLevelToString(pGPUSettings[i].m_GPUVendorPreset.m_ePresetLevel), pGPUSettings[i].m_GPUVendorPreset.m_szGPUName,
+                  pGPUSettings[i].m_GPUVendorPreset.m_szGPUDriverVersion);
         ++realGpu;
     }
 }
 
-void _vkCreateDevice(Renderer* pRenderer)
+void _vkCreateDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 {
-    //_vkCheckNAddExtension(const char *szName, u32 uCount, const VkExtensionProperties *pExts, u32 *pUsedCount, const char **ppUsedExtensions)
-    // if(_vkCheckNAddExtension(const char *szName, u32 uCount, const VkExtensionProperties *pExts, u32 *pUsedCount, const char **ppUsedExtensions))
+    JASSERT(pRenderer->m_pContext->Vulkan.m_hVkInstance);
+
+    if (pRenderer->m_eGPUMode == EGPUMode::Linked && _vkCheckExtension(&pRenderer->m_pContext->Vulkan, VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME))
+    {
+        VkDeviceGroupDeviceCreateInfoKHR deviceGroupInfo;
+        deviceGroupInfo.sType         = VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO_KHR;
+        deviceGroupInfo.pNext         = nullptr;
+        pRenderer->m_uLinkedNodeCount = 1;
+        u32 uDeviceGroupCount         = 0;
+        vkEnumeratePhysicalDeviceGroupsKHR(pRenderer->m_pContext->Vulkan.m_hVkInstance, &uDeviceGroupCount, NULL);
+        VkPhysicalDeviceGroupPropertiesKHR* props =
+            (VkPhysicalDeviceGroupPropertiesKHR*)JALLOCA(uDeviceGroupCount * sizeof(VkPhysicalDeviceGroupPropertiesKHR));
+        for (uint32_t i = 0; i < uDeviceGroupCount; ++i)
+        {
+            props[i].sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GROUP_PROPERTIES_KHR;
+            props[i].pNext = nullptr;
+        }
+        JCHECK_RHI_RESULT(vkEnumeratePhysicalDeviceGroupsKHR(pRenderer->m_pContext->Vulkan.m_hVkInstance, &uDeviceGroupCount, props));
+        for (uint32_t i = 0; i < uDeviceGroupCount; ++i)
+        {
+            if (props[i].physicalDeviceCount > 1)
+            {
+                deviceGroupInfo.physicalDeviceCount = props[i].physicalDeviceCount;
+                deviceGroupInfo.pPhysicalDevices    = props[i].physicalDevices;
+                pRenderer->m_uLinkedNodeCount       = deviceGroupInfo.physicalDeviceCount;
+                break;
+            }
+        }
+    }
+
+    if (pRenderer->m_uLinkedNodeCount < 2 && pRenderer->m_eGPUMode == EGPUMode::Unlinked)
+    {
+        pRenderer->m_eGPUMode = EGPUMode::Single;
+    }
+
+    if (!pDesc->m_pRenderContext)
+    {
+        // 选CPU了
+    }
+    else
+    {
+        JASSERT(pDesc->m_uGPUIndex < pDesc->m_pRenderContext->m_uGPUCount);
+
+        pRenderer->Vulkan.m_hVkActiveGPU                  = pDesc->m_pRenderContext->m_pGPUs[pDesc->m_uGPUIndex].Vulkan.m_hVkGPU;
+        pRenderer->Vulkan.m_pVkActiveGPUProperties        = (VkPhysicalDeviceProperties2*)JMALLOC(sizeof(VkPhysicalDeviceProperties2));
+        pRenderer->m_pActiveGpuSettings                   = (GPUSettings*)JMALLOC(sizeof(GPUSettings));
+        *pRenderer->Vulkan.m_pVkActiveGPUProperties       = pDesc->m_pRenderContext->m_pGPUs[pDesc->m_uGPUIndex].Vulkan.m_GPUProperties;
+        pRenderer->Vulkan.m_pVkActiveGPUProperties->pNext = NULL;
+        *pRenderer->m_pActiveGpuSettings                  = pDesc->m_pRenderContext->m_pGPUs[pDesc->m_uGPUIndex].m_Settings;
+    }
 }
 
 void _vkInitRendererContext(const RendererContextDesc* pDesc, RendererContext** ppContext)
@@ -451,7 +521,9 @@ void _vkExitRendererContext(RendererContext* pContext)
         }
         vkDestroyInstance(pContext->Vulkan.m_hVkInstance, pContext->Vulkan.m_pVkAllocationCallbacks);
     }
+    JFREE(pContext->Vulkan.m_pSupportLayers)
     JFREE(pContext->Vulkan.m_ppUsedLayers);
+    JFREE(pContext->Vulkan.m_pSupportExtensions)
     JFREE(pContext->Vulkan.m_ppUsedExtensions);
     JFREE(pContext->m_pGPUs);
     JFREE(pContext);
@@ -462,33 +534,44 @@ void _vkInitRenderer(const RendererDesc* pDesc, Renderer** ppRenderer)
     u8* pMem = (u8*)JCALLOC_ALIGNED(1, alignof(Renderer*), sizeof(Renderer) + sizeof(NullDescriptors));
     JASSERT(pMem);
 
-    Renderer* pRenderer                   = (Renderer*)pMem;
-    pRenderer->m_eGPUMode                 = pDesc->m_eGPUMode;
-    pRenderer->m_eShaderMode              = pDesc->m_eShaderMode;
-    pRenderer->m_bEnableGpuBaseValidation = pDesc->m_bEnableGPUBaseValidation;
-    pRenderer->m_pNullDescriptors         = (NullDescriptors*)(pMem + sizeof(Renderer));
+    Renderer* pRenderer           = (Renderer*)pMem;
+    pRenderer->m_pContext         = pDesc->m_pRenderContext;
+    pRenderer->m_eGPUMode         = pDesc->m_eGPUMode;
+    pRenderer->m_eShaderMode      = pDesc->m_eShaderMode;
+    pRenderer->m_pNullDescriptors = (NullDescriptors*)(pMem + sizeof(Renderer));
 
-    // pRenderer->m_szName = (char*)JCALLOC(strlen(pDesc.sz))
+    u32 uNameLen                  = strlen(pDesc->m_szName);
+    pRenderer->m_szName           = (char*)JCALLOC(uNameLen + 1, sizeof(char));
+    strcpy_s(pRenderer->m_szName, uNameLen, pDesc->m_szName);
 
     //如果是unlinked模式，就必须有RendererContext
     JASSERT(pDesc->m_eGPUMode != EGPUMode::Unlinked || pDesc);
-    if (pDesc->m_pRenderContext)
+    if (pRenderer->m_pContext)
     {
-        pRenderer->Vulkan.m_hVkInstance       = pDesc->m_pRenderContext->Vulkan.m_hVkInstance;
-        pRenderer->Vulkan.m_bOwnInstance      = false;
-        pRenderer->Vulkan.m_hVkDebugMessenger = pDesc->m_pRenderContext->Vulkan.m_hVkDebugMessenger;
-        // TODO
-        pRenderer->Vulkan.m_uDeviceIndex = 0;
+        pRenderer->Vulkan.m_bOwnInstance   = false;
+        pRenderer->Vulkan.m_uRendererIndex = pRenderer->m_pContext->m_uRendererCount;
     }
     else
     {
-        // pRenderer->Vulkan.m_hVkInstance =
-        //     _vkCreateInstance(pDesc->m_szAppName, pDesc->m_bEnableValidation, pDesc->m_bEnableGPUBaseValidation,
-        //     pDesc->m_bEnableDebugUtilsMessager);
-        // JASSERT(pRenderer->Vulkan.m_hVkInstance);
-        // pRenderer->Vulkan.m_bOwnInstance = true;
+        RendererContextDesc desc;
+        desc.m_eRenderer                   = pDesc->m_eRenderer;
+        desc.m_bDebug                      = pDesc->m_bDebug;
+        desc.m_bGPUDebug                   = pDesc->m_bGPUDebug;
+        desc.m_szAppName                   = pDesc->m_szName;
+        desc.Vulkan.m_uNeedLayersCount     = pDesc->Vulkan.m_uInstanceLayerCount;
+        desc.Vulkan.m_ppNeedLayers         = pDesc->Vulkan.m_ppInstanceLayers;
+        desc.Vulkan.m_uNeedExtensionsCount = pDesc->Vulkan.m_uInstanceExtensionCount;
+        desc.Vulkan.m_ppNeedExtensions     = pDesc->Vulkan.m_ppInstanceExtensions;
+
+        pRenderer->m_pContext              = (RendererContext*)JCALLOC_ALIGNED(1, alignof(RendererContext), sizeof(RendererContext));
+        pRenderer->m_pContext->m_eRenderer = ERenderer::Vulkan;
+        pRenderer->Vulkan.m_bOwnInstance   = true;
+        _vkCreateInstance(&desc, pRenderer->m_pContext);
     }
 
+    _vkCreateDevice(pDesc, pRenderer);
+
+    ++pRenderer->m_pContext->m_uRendererCount;
     *ppRenderer = pRenderer;
 }
 
