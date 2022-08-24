@@ -174,13 +174,211 @@ static VkBool32 VKAPI_PTR _vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeve
     return VK_FALSE;
 }
 
+static bool _vkDeviceBetterFunc(u32 uTestIndex, u32 uRefIndex, const GPUSettings* pGPUSettings, const VkPhysicalDeviceProperties2* pGPUProperties,
+                                const VkPhysicalDeviceMemoryProperties* pGPUMemoryProperties)
+{
+    const GPUSettings& testSettings = pGPUSettings[uTestIndex];
+    const GPUSettings& refSettings  = pGPUSettings[uRefIndex];
+
+    // 如果等级都不一样，直接选等级就行了
+    if (testSettings.m_GPUVendorPreset.m_ePresetLevel != refSettings.m_GPUVendorPreset.m_ePresetLevel)
+    {
+        return testSettings.m_GPUVendorPreset.m_ePresetLevel > refSettings.m_GPUVendorPreset.m_ePresetLevel;
+    }
+
+    // 处理一个是独显，一个不是独显的情况
+    const VkPhysicalDeviceProperties& testProps = pGPUProperties[uTestIndex].properties;
+    const VkPhysicalDeviceProperties& refProps  = pGPUProperties[uRefIndex].properties;
+    if (testProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && refProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+    {
+        return true;
+    }
+    if (testProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && refProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+    {
+        return false;
+    }
+
+    // 都一样的情况下按显存挑,只算显卡的独立显存
+    if (testProps.vendorID == refProps.vendorID && testProps.deviceID == refProps.deviceID)
+    {
+        const VkPhysicalDeviceMemoryProperties& testMemoryProps = pGPUMemoryProperties[uTestIndex];
+        const VkPhysicalDeviceMemoryProperties& refMemoryProps  = pGPUMemoryProperties[uRefIndex];
+        VkDeviceSize                            totalTestVram   = 0;
+        VkDeviceSize                            totalRefVram    = 0;
+        for (uint32_t i = 0; i < testMemoryProps.memoryHeapCount; ++i)
+        {
+            if (VK_MEMORY_HEAP_DEVICE_LOCAL_BIT & testMemoryProps.memoryHeaps[i].flags)
+                totalTestVram += testMemoryProps.memoryHeaps[i].size;
+        }
+        for (uint32_t i = 0; i < refMemoryProps.memoryHeapCount; ++i)
+        {
+            if (VK_MEMORY_HEAP_DEVICE_LOCAL_BIT & refMemoryProps.memoryHeaps[i].flags)
+                totalRefVram += refMemoryProps.memoryHeaps[i].size;
+        }
+        return totalTestVram >= totalRefVram;
+    }
+    return false;
+};
+
+static void _vkQueryGPUProperties(VkPhysicalDevice gpu, VkPhysicalDeviceProperties2* pGPUProperties,
+                                  VkPhysicalDeviceMemoryProperties* pGPUMemoryProperties, VkPhysicalDeviceFeatures2* pGPUFeatures,
+                                  VkQueueFamilyProperties** ppQueueFamilyProperties, u32* pQueueFamilyPropertyCount, GPUSettings* pGPUSettings)
+{
+    vkGetPhysicalDeviceMemoryProperties(gpu, pGPUMemoryProperties);
+
+    VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT featureFragmentInterlock;
+    featureFragmentInterlock.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT;
+    featureFragmentInterlock.pNext = nullptr;
+    pGPUFeatures->sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    pGPUFeatures->pNext            = &featureFragmentInterlock;
+    vkGetPhysicalDeviceFeatures2(gpu, pGPUFeatures);
+
+    VkPhysicalDeviceSubgroupProperties propsSubgroup;
+    propsSubgroup.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+    propsSubgroup.pNext   = nullptr;
+    pGPUProperties->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    pGPUProperties->pNext = &propsSubgroup;
+    vkGetPhysicalDeviceProperties2(gpu, pGPUProperties);
+
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, pQueueFamilyPropertyCount, nullptr);
+    *ppQueueFamilyProperties = (VkQueueFamilyProperties*)JCALLOC(*pQueueFamilyPropertyCount, sizeof(VkQueueFamilyProperties));
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, pQueueFamilyPropertyCount, *ppQueueFamilyProperties);
+
+    JCLEAR(pGPUSettings, sizeof(GPUSettings));
+    pGPUSettings->m_uUniformBufferAlignment          = (u32)pGPUProperties->properties.limits.minUniformBufferOffsetAlignment;
+    pGPUSettings->m_uUploadBufferTextureAlignment    = (u32)pGPUProperties->properties.limits.optimalBufferCopyOffsetAlignment;
+    pGPUSettings->m_uUploadBufferTextureRowAlignment = (u32)pGPUProperties->properties.limits.optimalBufferCopyRowPitchAlignment;
+    pGPUSettings->m_uMaxVertexInputBindings          = pGPUProperties->properties.limits.maxVertexInputBindings;
+    pGPUSettings->m_bMultiDrawIndirect               = pGPUFeatures->features.multiDrawIndirect;
+    pGPUSettings->m_uWaveLaneCount                   = propsSubgroup.subgroupSize;
+    pGPUSettings->m_bROVsSupported                   = featureFragmentInterlock.fragmentShaderPixelInterlock;
+    pGPUSettings->m_bTessellationSupported           = pGPUFeatures->features.tessellationShader;
+    pGPUSettings->m_bGeometryShaderSupported         = pGPUFeatures->features.geometryShader;
+
+    pGPUSettings->m_eWaveOpsSupportFlags             = EWaveOpsSupportFlags::None;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::BasicBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_VOTE_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::VoteBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ArithmeticBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::BallotBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ShuffleBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ShuffleRelativeBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_CLUSTERED_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ClusteredBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::QuadBit;
+    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_PARTITIONED_BIT_NV)
+        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::PartitionedBitNV;
+
+    sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szModelId, JMAX_NAME_LENGTH, "%#x", pGPUProperties->properties.deviceID);
+    sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szVendorId, JMAX_NAME_LENGTH, "%#x", pGPUProperties->properties.vendorID);
+    strncpy_s(pGPUSettings->m_GPUVendorPreset.m_szGPUName, pGPUProperties->properties.deviceName, JMAX_NAME_LENGTH);
+    strncpy_s(pGPUSettings->m_GPUVendorPreset.m_szRevisionId, "0x00", JMAX_NAME_LENGTH);
+    pGPUSettings->m_GPUVendorPreset.m_ePresetLevel = EGPUPresetLevel::Low;
+    // getGPUPresetLevel(pGPUSettings->m_GPUVendorPreset.m_szVendorId, pGPUSettings->m_GPUVendorPreset.m_szModelId,
+    // pGPUSettings->m_GPUVendorPreset.m_szRevisionId);
+
+    // fill in driver info
+    uint32_t major, minor, secondaryBranch, tertiaryBranch;
+    switch (_vkGetGPUVendor(pGPUProperties->properties.vendorID))
+    {
+    case EGPUVendor::Nvidia:
+        major           = (pGPUProperties->properties.driverVersion >> 22) & 0x3ff;
+        minor           = (pGPUProperties->properties.driverVersion >> 14) & 0x0ff;
+        secondaryBranch = (pGPUProperties->properties.driverVersion >> 6) & 0x0ff;
+        tertiaryBranch  = (pGPUProperties->properties.driverVersion) & 0x003f;
+
+        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u.%u", major, minor, secondaryBranch,
+                  tertiaryBranch);
+        break;
+    default:
+        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u",
+                  VK_VERSION_MAJOR(pGPUProperties->properties.driverVersion), VK_VERSION_MINOR(pGPUProperties->properties.driverVersion),
+                  VK_VERSION_PATCH(pGPUProperties->properties.driverVersion));
+        break;
+    }
+
+    pGPUFeatures->pNext   = nullptr;
+    pGPUProperties->pNext = nullptr;
+}
+
 static bool _vkSelectBestGPU(Renderer* pRenderer)
 {
     u32 uGPUCount = 0;
     JCHECK_RHI_RESULT(vkEnumeratePhysicalDevices(pRenderer->m_pContext->Vulkan.m_hVkInstance, &uGPUCount, nullptr));
-    JASSERT(uGPUCount>0);
+    JASSERT(uGPUCount > 0);
 
-    
+    VkInstance                        hVkInstance    = pRenderer->m_pContext->Vulkan.m_hVkInstance;
+    VkPhysicalDevice*                 pGPUs          = (VkPhysicalDevice*)alloca(uGPUCount * sizeof(VkPhysicalDevice));
+    VkPhysicalDeviceProperties2*      pGPUProperties = (VkPhysicalDeviceProperties2*)alloca(uGPUCount * sizeof(VkPhysicalDeviceProperties2));
+    VkPhysicalDeviceMemoryProperties* pGPUMemoryProperties =
+        (VkPhysicalDeviceMemoryProperties*)alloca(uGPUCount * sizeof(VkPhysicalDeviceMemoryProperties));
+    VkPhysicalDeviceFeatures2KHR* pGPUFeatures              = (VkPhysicalDeviceFeatures2KHR*)alloca(uGPUCount * sizeof(VkPhysicalDeviceFeatures2KHR));
+    VkQueueFamilyProperties**     ppQueueFamilyProperties   = (VkQueueFamilyProperties**)alloca(uGPUCount * sizeof(VkQueueFamilyProperties*));
+    u32*                          pQueueFamilyPropertyCount = (u32*)alloca(uGPUCount * sizeof(u32));
+
+    JCHECK_RHI_RESULT(vkEnumeratePhysicalDevices(hVkInstance, &uGPUCount, pGPUs));
+
+    u32          uGPUIndex    = UINT32_MAX;
+    GPUSettings* pGPUSettings = (GPUSettings*)alloca(uGPUCount * sizeof(GPUSettings));
+    for (uint32_t i = 0; i < uGPUCount; ++i)
+    {
+        _vkQueryGPUProperties(pGPUs[i], &pGPUProperties[i], &pGPUMemoryProperties[i], &pGPUFeatures[i], &ppQueueFamilyProperties[i],
+                              &pQueueFamilyPropertyCount[i], &pGPUSettings[i]);
+
+        JLOG_INFO("GPU[{}] detected. Vendor ID:{}, Model ID: {}, Preset: {}, GPU Name: {}, driver version: {}", i,
+                  pGPUSettings[i].m_GPUVendorPreset.m_szVendorId, pGPUSettings[i].m_GPUVendorPreset.m_szModelId,
+                  EGPUPresetLevelToString(pGPUSettings[i].m_GPUVendorPreset.m_ePresetLevel), pGPUSettings[i].m_GPUVendorPreset.m_szGPUName,
+                  pGPUSettings[i].m_GPUVendorPreset.m_szGPUDriverVersion);
+
+        if (uGPUIndex == UINT32_MAX || _vkDeviceBetterFunc(i, uGPUIndex, pGPUSettings, pGPUProperties, pGPUMemoryProperties))
+        {
+            u32                      count      = pQueueFamilyPropertyCount[i];
+            VkQueueFamilyProperties* properties = ppQueueFamilyProperties[i];
+
+            for (uint32_t j = 0; j < count; j++)
+            {
+                if (properties[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                {
+                    uGPUIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (VK_PHYSICAL_DEVICE_TYPE_CPU == pGPUProperties[uGPUIndex].properties.deviceType)
+    {
+        JLOG_CRITICAL("The only available GPU is of type VK_PHYSICAL_DEVICE_TYPE_CPU. Early exiting");
+        JASSERT(false);
+        return false;
+    }
+
+    JASSERT(uGPUIndex != UINT32_MAX);
+    pRenderer->Vulkan.m_hVkActiveGPU                  = pGPUs[uGPUIndex];
+    pRenderer->Vulkan.m_pVkActiveGPUProperties        = (VkPhysicalDeviceProperties2*)JMALLOC(sizeof(VkPhysicalDeviceProperties2));
+    pRenderer->m_pActiveGpuSettings                   = (GPUSettings*)JMALLOC(sizeof(GPUSettings));
+    *pRenderer->Vulkan.m_pVkActiveGPUProperties       = pGPUProperties[uGPUIndex];
+    pRenderer->Vulkan.m_pVkActiveGPUProperties->pNext = nullptr;
+    *pRenderer->m_pActiveGpuSettings                  = pGPUSettings[uGPUIndex];
+    JASSERT(VK_NULL_HANDLE != pRenderer->Vulkan.m_hVkActiveGPU);
+
+    JLOG_INFO("GPU[{}] is selected as default GPU", uGPUIndex);
+    JLOG_INFO("Name of selected gpu: {}", pRenderer->m_pActiveGpuSettings->m_GPUVendorPreset.m_szGPUName);
+    JLOG_INFO("Vendor id of selected gpu: {}", pRenderer->m_pActiveGpuSettings->m_GPUVendorPreset.m_szVendorId);
+    JLOG_INFO("Model id of selected gpu: {}", pRenderer->m_pActiveGpuSettings->m_GPUVendorPreset.m_szModelId);
+    JLOG_INFO("Preset of selected gpu: {}", EGPUPresetLevelToString(pRenderer->m_pActiveGpuSettings->m_GPUVendorPreset.m_ePresetLevel));
+
+    for (uint32_t i = 0; i < uGPUCount; ++i)
+    {
+        JFREE(ppQueueFamilyProperties[i]);
+    }
+    return true;
 }
 
 static void _vkCreateInstance(const RendererContextDesc* pDesc, RendererContext* pContext)
@@ -292,93 +490,6 @@ static void _vkCreateInstance(const RendererContextDesc* pDesc, RendererContext*
     pContext->Vulkan.m_hVkInstance = hVkInstance;
 }
 
-static void _vkQueryGPUProperties(VkPhysicalDevice gpu, VkPhysicalDeviceProperties2* pGPUProperties,
-                                  VkPhysicalDeviceMemoryProperties* pGPUMemoryProperties, VkPhysicalDeviceFeatures2* pGPUFeatures,
-                                  VkQueueFamilyProperties** ppQueueFamilyProperties, u32* pQueueFamilyPropertyCount, GPUSettings* pGPUSettings)
-{
-    vkGetPhysicalDeviceMemoryProperties(gpu, pGPUMemoryProperties);
-
-    VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT featureFragmentInterlock;
-    featureFragmentInterlock.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT;
-    featureFragmentInterlock.pNext = nullptr;
-    pGPUFeatures->sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    pGPUFeatures->pNext            = &featureFragmentInterlock;
-    vkGetPhysicalDeviceFeatures2(gpu, pGPUFeatures);
-
-    VkPhysicalDeviceSubgroupProperties propsSubgroup;
-    propsSubgroup.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-    propsSubgroup.pNext   = nullptr;
-    pGPUProperties->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    pGPUProperties->pNext = &propsSubgroup;
-    vkGetPhysicalDeviceProperties2(gpu, pGPUProperties);
-
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, pQueueFamilyPropertyCount, nullptr);
-    *ppQueueFamilyProperties = (VkQueueFamilyProperties*)JCALLOC(*pQueueFamilyPropertyCount, sizeof(VkQueueFamilyProperties));
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, pQueueFamilyPropertyCount, *ppQueueFamilyProperties);
-
-    JCLEAR(pGPUSettings, sizeof(GPUSettings));
-    pGPUSettings->m_uUniformBufferAlignment          = (u32)pGPUProperties->properties.limits.minUniformBufferOffsetAlignment;
-    pGPUSettings->m_uUploadBufferTextureAlignment    = (u32)pGPUProperties->properties.limits.optimalBufferCopyOffsetAlignment;
-    pGPUSettings->m_uUploadBufferTextureRowAlignment = (u32)pGPUProperties->properties.limits.optimalBufferCopyRowPitchAlignment;
-    pGPUSettings->m_uMaxVertexInputBindings          = pGPUProperties->properties.limits.maxVertexInputBindings;
-    pGPUSettings->m_bMultiDrawIndirect               = pGPUFeatures->features.multiDrawIndirect;
-    pGPUSettings->m_uWaveLaneCount                   = propsSubgroup.subgroupSize;
-    pGPUSettings->m_bROVsSupported                   = featureFragmentInterlock.fragmentShaderPixelInterlock;
-    pGPUSettings->m_bTessellationSupported           = pGPUFeatures->features.tessellationShader;
-    pGPUSettings->m_bGeometryShaderSupported         = pGPUFeatures->features.geometryShader;
-
-    pGPUSettings->m_eWaveOpsSupportFlags             = EWaveOpsSupportFlags::None;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::BasicBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_VOTE_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::VoteBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ArithmeticBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::BallotBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ShuffleBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ShuffleRelativeBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_CLUSTERED_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::ClusteredBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::QuadBit;
-    if (propsSubgroup.supportedOperations & VK_SUBGROUP_FEATURE_PARTITIONED_BIT_NV)
-        pGPUSettings->m_eWaveOpsSupportFlags |= EWaveOpsSupportFlags::PartitionedBitNV;
-
-    sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szModelId, JMAX_NAME_LENGTH, "%#x", pGPUProperties->properties.deviceID);
-    sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szVendorId, JMAX_NAME_LENGTH, "%#x", pGPUProperties->properties.vendorID);
-    strncpy_s(pGPUSettings->m_GPUVendorPreset.m_szGPUName, pGPUProperties->properties.deviceName, JMAX_NAME_LENGTH);
-    strncpy_s(pGPUSettings->m_GPUVendorPreset.m_szRevisionId, "0x00", JMAX_NAME_LENGTH);
-    pGPUSettings->m_GPUVendorPreset.m_ePresetLevel = EGPUPresetLevel::Low;
-    // getGPUPresetLevel(pGPUSettings->m_GPUVendorPreset.m_szVendorId, pGPUSettings->m_GPUVendorPreset.m_szModelId,
-    // pGPUSettings->m_GPUVendorPreset.m_szRevisionId);
-
-    // fill in driver info
-    uint32_t major, minor, secondaryBranch, tertiaryBranch;
-    switch (_vkGetGPUVendor(pGPUProperties->properties.vendorID))
-    {
-    case EGPUVendor::Nvidia:
-        major           = (pGPUProperties->properties.driverVersion >> 22) & 0x3ff;
-        minor           = (pGPUProperties->properties.driverVersion >> 14) & 0x0ff;
-        secondaryBranch = (pGPUProperties->properties.driverVersion >> 6) & 0x0ff;
-        tertiaryBranch  = (pGPUProperties->properties.driverVersion) & 0x003f;
-
-        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u.%u", major, minor, secondaryBranch,
-                  tertiaryBranch);
-        break;
-    default:
-        sprintf_s(pGPUSettings->m_GPUVendorPreset.m_szGPUDriverVersion, JMAX_NAME_LENGTH, "%u.%u.%u",
-                  VK_VERSION_MAJOR(pGPUProperties->properties.driverVersion), VK_VERSION_MINOR(pGPUProperties->properties.driverVersion),
-                  VK_VERSION_PATCH(pGPUProperties->properties.driverVersion));
-        break;
-    }
-
-    pGPUFeatures->pNext   = nullptr;
-    pGPUProperties->pNext = nullptr;
-}
-
 static void _vkInitGPUInfos(RendererContext* pContext)
 {
     u32 uGPUCount = 0;
@@ -482,7 +593,7 @@ void _vkCreateDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 
     if (!pDesc->m_pRenderContext)
     {
-        // 选CPU了
+        _vkSelectBestGPU(pRenderer);
     }
     else
     {
@@ -570,6 +681,9 @@ void _vkInitRenderer(const RendererDesc* pDesc, Renderer** ppRenderer)
     }
 
     _vkCreateDevice(pDesc, pRenderer);
+
+    // 内存分配
+    //VmaAllocatorCreateInfo createInfo{0};
 
     ++pRenderer->m_pContext->m_uRendererCount;
     *ppRenderer = pRenderer;
