@@ -59,6 +59,9 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 #define JARRAY_SIZE(a)      (sizeof(a) / sizeof(a[0]))
 #define JMAX_NAME_LENGTH    256
 
+#define JMIN(v0, v1)        (v0 < v1 ? v0 : v1)
+#define JMAX(v0, v1)        (v0 > v1 ? v0 : v1)
+
 #define SPDLOG_ACTIVE_LEVEL JLOG_LEVEL
 #include <spdlog/spdlog.h>
 #define JLOG_LOGGER_TRACE(logger, ...)    SPDLOG_LOGGER_TRACE(logger, __VA_ARGS__)
@@ -80,11 +83,11 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 #define JLOG_CRITICAL(...)                SPDLOG_CRITICAL(__VA_ARGS__)
 
 #include <assert.h>
-#define JASSERT(x)                                                                                                                                   \
-    if (!(x))                                                                                                                                        \
-    {                                                                                                                                                \
-        JLOG_CRITICAL("\nexpr:\t{}\nfile:\t{}\nline:\t{}\nfunc:\t{}", #x, __FILE__, __LINE__, __FUNCTION__);                                         \
-        assert(false);                                                                                                                               \
+#define JASSERT(x)                                                                                                                                                                 \
+    if (!(x))                                                                                                                                                                      \
+    {                                                                                                                                                                              \
+        JLOG_CRITICAL("\nexpr:\t{}\nfile:\t{}\nline:\t{}\nfunc:\t{}", #x, __FILE__, __LINE__, __FUNCTION__);                                                                       \
+        assert(false);                                                                                                                                                             \
     }
 
 #include <stdlib.h>
@@ -95,9 +98,9 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 #define JCALLOC(count, size)                       calloc(count, size)
 #define JCALLOC_ALIGNED(count, aligned_size, size) calloc(count, size)
 #define JALLOCA(size)                              alloca(size)
-#define JFREE(ptr)                                                                                                                                   \
-    if (ptr)                                                                                                                                         \
-    {                                                                                                                                                \
-        free(ptr);                                                                                                                                   \
-        ptr = nullptr;                                                                                                                               \
+#define JFREE(ptr)                                                                                                                                                                 \
+    if (ptr)                                                                                                                                                                       \
+    {                                                                                                                                                                              \
+        free(ptr);                                                                                                                                                                 \
+        ptr = nullptr;                                                                                                                                                             \
     }

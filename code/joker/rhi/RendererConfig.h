@@ -8,6 +8,7 @@
 #endif
 
 #if (defined(JOPTION_RHI_MULTI) && JOPTION_RHI_VULKAN) || (JOPTION_RHI_API == JOPTION_RHI_VULKAN)
+#include "vulkan/RendererConfigVulkan.h"
 #include "vulkan/RendererTypesVulkan.h"
 #define JDECL_RHI_PROP_VULKAN(type) joker::rhi::vulkan::_vk##type Vulkan;
 #else

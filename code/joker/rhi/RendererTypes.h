@@ -101,7 +101,7 @@ RendererContext*    m_pContext;
 NullDescriptors*    m_pNullDescriptors;
 char*               m_szName;
 char*               m_szApiName;
-struct GPUSettings* m_pActiveGpuSettings;
+struct GPUSettings* m_pActiveGPUSettings;
 struct ShaderMacro* m_pBuiltinShaderDefines;
 struct GPUCapBits*  m_pCapBits;
 u32                 m_uLinkedNodeCount     : 4;

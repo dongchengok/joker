@@ -7,3 +7,6 @@
 [submodule "3rd/spdlog"]
 	path = 3rd/spdlog
 	url = git@github.com:dongchengok/spdlog.git
+[submodule "3rd/VulkanMemoryAllocator"]
+	path = 3rd/VulkanMemoryAllocator
+	url = git@github.com:dongchengok/VulkanMemoryAllocator.git
