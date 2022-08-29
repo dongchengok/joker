@@ -17,8 +17,8 @@ constexpr static const char* kInstanceLayers[] = {
 //必须支持的扩展
 constexpr static const char* kInstanceExtensions[] = {
     VK_KHR_SURFACE_EXTENSION_NAME,
-#if defined(_WIN32)
-    "VK_KHR_win32_surface",
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #endif
     VK_NV_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME, //干啥的不知道，TODO
     VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME,       //合法使用HDR格式
@@ -459,6 +459,71 @@ static bool _vkSelectBestGPU(Renderer* pRenderer)
     return true;
 }
 
+static void _vkCreateVmaAllocator(Renderer* pRenderer)
+{
+    VmaAllocatorCreateInfo createInfo = {0};
+    createInfo.device                 = pRenderer->Vulkan.m_hVkDevice;
+    createInfo.physicalDevice         = pRenderer->Vulkan.m_hVkActiveGPU;
+    createInfo.instance               = pRenderer->m_pContext->Vulkan.m_hVkInstance;
+
+    if (pRenderer->Vulkan.m_bDedicatedAllocationExtension)
+    {
+        createInfo.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+    }
+
+    if (pRenderer->Vulkan.m_bBufferDeviceAddressExtension)
+    {
+        createInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    }
+
+    VmaVulkanFunctions vulkanFunctions                  = {};
+    vulkanFunctions.vkGetInstanceProcAddr               = vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr                 = vkGetDeviceProcAddr;
+    vulkanFunctions.vkAllocateMemory                    = vkAllocateMemory;
+    vulkanFunctions.vkBindBufferMemory                  = vkBindBufferMemory;
+    vulkanFunctions.vkBindImageMemory                   = vkBindImageMemory;
+    vulkanFunctions.vkCreateBuffer                      = vkCreateBuffer;
+    vulkanFunctions.vkCreateImage                       = vkCreateImage;
+    vulkanFunctions.vkDestroyBuffer                     = vkDestroyBuffer;
+    vulkanFunctions.vkDestroyImage                      = vkDestroyImage;
+    vulkanFunctions.vkFreeMemory                        = vkFreeMemory;
+    vulkanFunctions.vkGetBufferMemoryRequirements       = vkGetBufferMemoryRequirements;
+    vulkanFunctions.vkGetBufferMemoryRequirements2KHR   = vkGetBufferMemoryRequirements2KHR;
+    vulkanFunctions.vkGetImageMemoryRequirements        = vkGetImageMemoryRequirements;
+    vulkanFunctions.vkGetImageMemoryRequirements2KHR    = vkGetImageMemoryRequirements2KHR;
+    vulkanFunctions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
+    vulkanFunctions.vkGetPhysicalDeviceProperties       = vkGetPhysicalDeviceProperties;
+    vulkanFunctions.vkMapMemory                         = vkMapMemory;
+    vulkanFunctions.vkUnmapMemory                       = vkUnmapMemory;
+    vulkanFunctions.vkFlushMappedMemoryRanges           = vkFlushMappedMemoryRanges;
+    vulkanFunctions.vkInvalidateMappedMemoryRanges      = vkInvalidateMappedMemoryRanges;
+    vulkanFunctions.vkCmdCopyBuffer                     = vkCmdCopyBuffer;
+#if VMA_BIND_MEMORY2 || VMA_VULKAN_VERSION >= 1001000
+    /// Fetch "vkBindBufferMemory2" on Vulkan >= 1.1, fetch "vkBindBufferMemory2KHR" when using VK_KHR_bind_memory2 extension.
+    vulkanFunctions.vkBindBufferMemory2KHR = vkBindBufferMemory2KHR;
+    /// Fetch "vkBindImageMemory2" on Vulkan >= 1.1, fetch "vkBindImageMemory2KHR" when using VK_KHR_bind_memory2 extension.
+    vulkanFunctions.vkBindImageMemory2KHR = vkBindImageMemory2KHR;
+#endif
+#if VMA_MEMORY_BUDGET || VMA_VULKAN_VERSION >= 1001000
+#ifdef NX64
+    vulkanFunctions.vkGetPhysicalDeviceMemoryProperties2KHR = vkGetPhysicalDeviceMemoryProperties2;
+#else
+    vulkanFunctions.vkGetPhysicalDeviceMemoryProperties2KHR = vkGetPhysicalDeviceMemoryProperties2KHR;
+#endif
+#endif
+#if VMA_VULKAN_VERSION >= 1003000
+    /// Fetch from "vkGetDeviceBufferMemoryRequirements" on Vulkan >= 1.3, but you can also fetch it from "vkGetDeviceBufferMemoryRequirementsKHR" if you enabled extension
+    /// VK_KHR_maintenance4.
+    vulkanFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
+    /// Fetch from "vkGetDeviceImageMemoryRequirements" on Vulkan >= 1.3, but you can also fetch it from "vkGetDeviceImageMemoryRequirementsKHR" if you enabled extension
+    /// VK_KHR_maintenance4.
+    vulkanFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
+#endif
+    createInfo.pVulkanFunctions     = &vulkanFunctions;
+    createInfo.pAllocationCallbacks = kAllocator;
+    vmaCreateAllocator(&createInfo, &pRenderer->Vulkan.pVmaAllocator);
+}
+
 static void _vkCreateInstance(const RendererContextDesc* pDesc, RendererContext* pContext)
 {
     JCHECK_RHI_RESULT(volkInitialize());
@@ -845,7 +910,7 @@ void _vkCreateDevice(const RendererDesc* pDesc, Renderer* pRenderer)
 
     JCHECK_RHI_RESULT(vkCreateDevice(pRenderer->Vulkan.m_hVkActiveGPU, &createInfo, kAllocator, &pRenderer->Vulkan.m_hVkDevice));
 
-    if(pRenderer->m_eGPUMode != EGPUMode::Unlinked)
+    if (pRenderer->m_eGPUMode != EGPUMode::Unlinked)
     {
         volkLoadDevice(pRenderer->Vulkan.m_hVkDevice);
     }
@@ -924,12 +989,53 @@ void _vkInitRenderer(const RendererDesc* pDesc, Renderer** ppRenderer)
     }
 
     _vkCreateDevice(pDesc, pRenderer);
+    _vkCreateVmaAllocator(pRenderer);
 
-    // 内存分配
-    // VmaAllocatorCreateInfo createInfo = { 0 };
-	// 	createInfo.device = pRenderer->mVulkan.pVkDevice;
-	// 	createInfo.physicalDevice = pRenderer->mVulkan.pVkActiveGPU;
-	// 	createInfo.instance = pRenderer->mVulkan.pVkInstance;
+// 创建默认资源先屏蔽了,用到再处理
+//     // Empty descriptor set for filling in gaps when example: set 1 is used but set 0 is not used in the shader.
+//     // We still need to bind empty descriptor set here to keep some drivers happy
+//     VkDescriptorPoolSize descriptorPoolSizes[1] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1}};
+//     add_descriptor_pool(pRenderer, 1, 0, descriptorPoolSizes, 1, &pRenderer->mVulkan.pEmptyDescriptorPool);
+//     VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
+//     VkDescriptorSet*                emptySets[]      = {&pRenderer->mVulkan.pEmptyDescriptorSet};
+//     layoutCreateInfo.sType                           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+//     CHECK_VKRESULT(vkCreateDescriptorSetLayout(pRenderer->mVulkan.pVkDevice, &layoutCreateInfo, &gVkAllocationCallbacks, &pRenderer->mVulkan.pEmptyDescriptorSetLayout));
+//     consume_descriptor_sets(pRenderer->mVulkan.pVkDevice, pRenderer->mVulkan.pEmptyDescriptorPool, &pRenderer->mVulkan.pEmptyDescriptorSetLayout, 1, emptySets);
+
+//     pRenderPassMutex[pRenderer->mUnlinkedRendererIndex] = (Mutex*)tf_calloc(1, sizeof(Mutex));
+//     initMutex(pRenderPassMutex[pRenderer->mUnlinkedRendererIndex]);
+//     gRenderPassMap[pRenderer->mUnlinkedRendererIndex]  = tf_placement_new<eastl::hash_map<ThreadID, RenderPassMap>>(tf_malloc(sizeof(*gRenderPassMap[0])));
+//     gFrameBufferMap[pRenderer->mUnlinkedRendererIndex] = tf_placement_new<eastl::hash_map<ThreadID, FrameBufferMap>>(tf_malloc(sizeof(*gFrameBufferMap[0])));
+
+//     VkPhysicalDeviceFeatures2KHR gpuFeatures           = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR};
+// #ifdef NX64
+//     vkGetPhysicalDeviceFeatures2(pRenderer->mVulkan.pVkActiveGPU, &gpuFeatures);
+// #else
+//     vkGetPhysicalDeviceFeatures2KHR(pRenderer->mVulkan.pVkActiveGPU, &gpuFeatures);
+// #endif
+
+//     // Set shader macro based on runtime information
+//     static char descriptorIndexingMacroBuffer[2]          = {};
+//     static char textureArrayDynamicIndexingMacroBuffer[2] = {};
+//     sprintf(descriptorIndexingMacroBuffer, "%u", (uint32_t)(pRenderer->mVulkan.mDescriptorIndexingExtension));
+//     sprintf(textureArrayDynamicIndexingMacroBuffer, "%u", (uint32_t)(gpuFeatures.features.shaderSampledImageArrayDynamicIndexing));
+//     static ShaderMacro rendererShaderDefines[] = {
+//         {"VK_EXT_DESCRIPTOR_INDEXING_ENABLED", descriptorIndexingMacroBuffer},
+//         {"VK_FEATURE_TEXTURE_ARRAY_DYNAMIC_INDEXING_ENABLED", textureArrayDynamicIndexingMacroBuffer},
+//         // Descriptor set indices
+//         {"UPDATE_FREQ_NONE", "set = 0"},
+//         {"UPDATE_FREQ_PER_FRAME", "set = 1"},
+//         {"UPDATE_FREQ_PER_BATCH", "set = 2"},
+//         {"UPDATE_FREQ_PER_DRAW", "set = 3"},
+//     };
+//     pRenderer->mBuiltinShaderDefinesCount = sizeof(rendererShaderDefines) / sizeof(rendererShaderDefines[0]);
+//     pRenderer->pBuiltinShaderDefines      = rendererShaderDefines;
+
+//     util_find_queue_family_index(pRenderer, 0, QUEUE_TYPE_GRAPHICS, NULL, &pRenderer->mVulkan.mGraphicsQueueFamilyIndex, NULL);
+//     util_find_queue_family_index(pRenderer, 0, QUEUE_TYPE_COMPUTE, NULL, &pRenderer->mVulkan.mComputeQueueFamilyIndex, NULL);
+//     util_find_queue_family_index(pRenderer, 0, QUEUE_TYPE_TRANSFER, NULL, &pRenderer->mVulkan.mTransferQueueFamilyIndex, NULL);
+
+//     add_default_resources(pRenderer);
 
     ++pRenderer->m_pContext->m_uRendererCount;
     *ppRenderer = pRenderer;

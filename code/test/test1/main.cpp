@@ -23,6 +23,18 @@ void *operator new[](size_t size, size_t /*alignment*/, size_t /*alignmentOffset
 #include <vk_engine.h>
 #include "JokerRHI.h"
 
+#include <EASTL/string.h>
+
+struct TestString
+{
+    char data[256];
+    
+    operator const char*() const
+    {
+        return data;
+    }
+};
+
 int main(int argc, char *argv[])
 {
     // volkInitialize();
@@ -54,6 +66,11 @@ int main(int argc, char *argv[])
     SPDLOG_TRACE("Some trace message with param {}", 42);
     SPDLOG_DEBUG("Some debug message");
 
+    // TestString a;
+    // strcpy_s(a.data,256,"hahahaha");
+    // eastl::string test = "hahahah";
+    // SPDLOG_WARN(a);
+
     // joker::rhi::RendererContextDesc desc{};
     // desc.m_eRenderer = joker::rhi::ERenderer::Vulkan;
     // desc.m_bDebug = true;
@@ -71,6 +88,14 @@ int main(int argc, char *argv[])
     desc.m_szName = "test";
     joker::rhi::Renderer* pRenderer;
     joker::rhi::InitRenderer(&desc, &pRenderer);
+
+    joker::vector<int> haha;
+    haha.push_back(1);
+    joker::vector<double> hoho;
+    hoho.push_back(1.0);
+    hoho.pop_back();
+    joker::string xixi = "xixi";
+    xixi.append("haha");
 
     VulkanEngine engine;
 

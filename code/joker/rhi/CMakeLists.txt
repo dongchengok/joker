@@ -1,2 +1,2 @@
 joker_project_engine(JokerRHI)
-target_link_libraries(JokerRHI PUBLIC JokerCore volk::volk)
+target_link_libraries(JokerRHI PUBLIC JokerCore volk::volk VulkanMemoryAllocator)
