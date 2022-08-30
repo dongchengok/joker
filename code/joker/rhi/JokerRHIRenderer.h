@@ -10,12 +10,16 @@ struct RHIRendererDesc
     bool   bGPUDebug : 1;
 };
 
-class RHIRenderer
+class JRHI_ALIGN RHIRenderer
 {
   public:
     virtual ~RHIRenderer()
     {
     }
+
+  public:
+    void* m_pHWContext = nullptr;
+    void* m_pHWDevice  = nullptr;
 };
 
 }

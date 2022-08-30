@@ -11,6 +11,8 @@
 #define JIMPL_RHI_FUNC(ret, name, ...)
 #endif
 
+#define JRHI_ALIGN alignas(alignof(void*))
+
 
 namespace joker
 {
