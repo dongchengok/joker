@@ -13,13 +13,31 @@ struct RHIRendererDesc
 class JRHI_ALIGN RHIRenderer
 {
   public:
-    virtual ~RHIRenderer()
-    {
-    }
+    virtual ~RHIRenderer();
 
-  public:
-    void* m_pHWContext = nullptr;
-    void* m_pHWDevice  = nullptr;
+    const RHIRendererDesc& GetDesc() const;
+    void*                  GetContextHandle() const;
+    void*                  GetDeviceHandle() const;
+
+  protected:
+    RHIRendererDesc m_Desc;
+    void*           m_pHWContext = nullptr;
+    void*           m_pHWDevice  = nullptr;
 };
+
+inline const RHIRendererDesc& RHIRenderer::GetDesc() const
+{
+    return m_Desc;
+}
+
+inline void* RHIRenderer::GetContextHandle() const
+{
+    return m_pHWContext;
+}
+
+inline void* RHIRenderer::GetDeviceHandle() const
+{
+    return m_pHWDevice;
+}
 
 }
