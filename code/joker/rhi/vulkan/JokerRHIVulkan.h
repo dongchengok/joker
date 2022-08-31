@@ -14,5 +14,15 @@
 #endif
 
 #ifndef JRHI_VK_CHECK
-#define JRHI_VK_CHECK(exp) JASSERT(0==(n32)(exp))
+#define JRHI_VK_CHECK(exp) JASSERT(0 == (n32)(exp))
 #endif
+
+namespace joker
+{
+
+extern RHIRenderer* g_pRendererVulkan;
+
+}
+
+#define JRHI_VK_INSTANCE (*(VkInstance*)(joker::g_pRendererVulkan->GetContextHandle()))
+#define JRHI_VK_DEVICE (*(VkDevice*)(joker::g_pRendererVulkan->GetDeviceHandle()))

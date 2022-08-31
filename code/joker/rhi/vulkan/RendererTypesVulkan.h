@@ -56,7 +56,7 @@ struct alignas(64) _vkRenderer
     VkDescriptorPool             m_hVkEmptyDescriptorPool;
     VkDescriptorSetLayout        m_hVkEmptyDescriptorSetLayout;
     VkDescriptorSet              m_hVkEmptyDescriptorSet;
-    struct VmaAllocator_T*       pVmaAllocator;
+    struct VmaAllocator_T*       m_pVmaAllocator;
     bool                         m_bRaytracingSupported                    : 1;
     bool                         m_bDedicatedAllocationExtension           : 1;
     bool                         m_bGetMemoryRequirement2Extension         : 1;
