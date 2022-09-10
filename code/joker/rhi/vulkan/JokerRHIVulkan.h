@@ -12,17 +12,3 @@
 #if defined(VK_KHR_ray_tracing_pipeline) && defined(VK_KHR_acceleration_structure)
 #define VK_RAYTRACING_AVAILABLE
 #endif
-
-#ifndef JRHI_VK_CHECK
-#define JRHI_VK_CHECK(exp) JASSERT(0 == (n32)(exp))
-#endif
-
-namespace joker
-{
-
-extern RHIRenderer* g_pRendererVulkan;
-
-}
-
-#define JRHI_VK_INSTANCE (*(VkInstance*)(joker::g_pRendererVulkan->GetContextHandle()))
-#define JRHI_VK_DEVICE (*(VkDevice*)(joker::g_pRendererVulkan->GetDeviceHandle()))

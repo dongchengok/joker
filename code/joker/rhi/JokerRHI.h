@@ -1,10 +1,11 @@
 #pragma once
 
 #include "JokerCore.h"
-#include "RendererEnums.h"
-#include "RendererInit.h"
 
-#include "JokerRHIType.h"
+#include "JokerRendererEnum.h"
+#include "JokerRendererType.h"
+
+#include "JokerRHIRenderer.h"
 
 namespace joker
 {

@@ -80,14 +80,20 @@ int main(int argc, char *argv[])
     // joker::rhi::RendererContext* pContext{};
     // joker::rhi::InitRendererContext(&desc,&pContext);
 
-    joker::rhi::RendererDesc desc{};
-    desc.m_eRenderer = joker::rhi::ERenderer::Vulkan;
-    desc.m_bDebug = true;
-    desc.m_bGPUDebug = false;
-    desc.m_eGPUMode = joker::rhi::EGPUMode::Single;
-    desc.m_szName = "test";
-    joker::rhi::Renderer* pRenderer;
-    joker::rhi::InitRenderer(&desc, &pRenderer);
+    // joker::rhi::RendererDesc desc{};
+    // desc.m_eRenderer = joker::rhi::ERenderer::Vulkan;
+    // desc.m_bDebug = true;
+    // desc.m_bGPUDebug = false;
+    // desc.m_eGPUMode = joker::rhi::EGPUMode::Single;
+    // desc.m_szName = "test";
+    // joker::rhi::Renderer* pRenderer;
+    // joker::rhi::InitRenderer(&desc, &pRenderer);
+    joker::RHIRendererDesc desc;
+    desc.szAppName = "test";
+    desc.bUseAllQueue = false;
+    desc.bCPUDebug = true;
+    desc.bGPUDebug = false;
+    auto pRenderer = joker::RHIInitRenderer(desc);
 
     joker::vector<int> haha;
     haha.push_back(1);
@@ -105,7 +111,9 @@ int main(int argc, char *argv[])
 
     engine.cleanup();
 
-    joker::rhi::ExitRenderer(pRenderer);
+    joker::RHIExitRenderer(pRenderer);
+
+    // joker::rhi::ExitRenderer(pRenderer);
     // joker::rhi::ExitRendererContext(pContext);
 
     return 0;

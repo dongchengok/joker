@@ -1,32 +1,79 @@
 #pragma once
 
 #include "JokerRHIRenderer.h"
-#include <vulkan/vulkan_core.h>
 
 namespace joker
 {
 
+// TODO 回头把平时用不到的数据挪出去，减少对象大小
 class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
 {
+    struct GPUInfo
+    {
+        VkPhysicalDevice     hVkPhysicalDevice;
+        string               szVendor;
+        string               szModel;
+        string               szRevision;
+        string               szGPUName;
+        string               szGPUDriverVersion;
+        string               szGPUDrriverDate;
+        EGPUType             eGPUType;
+        EWaveOpsSupportFlags eWaveOpsSupportFlags;
+        EShadingRate         eShadingRates;
+        EShadingRateCaps     eShadingRateCaps;
+        VkDeviceSize         uMemoryHeapSize;
+        u32                  uApiVersion;
+        u32                  uUniformBufferAlignment;
+        u32                  uUploadBufferTextureAlignment;
+        u32                  uUploadBufferTextureRowAlignment;
+        u32                  uMaxVertexInputBindings;
+        u32                  uMaxRootSignatureDWORDS;
+        u32                  uWaveLaneCount;
+        u32                  uShadingRateTexelWidth;
+        u32                  uShadingRateTexelHeight;
+        u32                  bMultiDrawIndirect       : 1;
+        u32                  bROVsSupported           : 1;
+        u32                  bTessellationSupported   : 1;
+        u32                  bGeometryShaderSupported : 1;
+        u32                  bGpuBreadcrumbs          : 1;
+        u32                  bHDRSupported            : 1;
+        bool                 bValid                   : 1;
+    };
+    struct RendererInfo
+    {
+        u32                    uUsingGPUIndex;
+        vector<GPUInfo>        vGPUs;
+        VkAllocationCallbacks* pAllocationCallbacks = nullptr;
+    };
+
   public:
     RHIRendererVulkan(const RHIRendererDesc& desc);
     virtual ~RHIRendererVulkan();
 
+    void                  Init();
+    void                  Exit();
+
+    virtual n32           GetGPUCount() const override;
+    virtual n32           GetGPUUsingIndex() const override;
+    virtual const string& GetGPUName(n32 idx) const override;
+    virtual const string& GetGPUVendor(n32 idx) const override;
+    virtual const string& GetGPUModel(n32 idx) const override;
+
   private:
-    void        _CreateInstance();
-    void        _CreateDevice();
-    void        _CreateVmaAllocator();
+    void                 _CreateInstance();
+    void                 _CreateDevice();
+    void                 _CreateVmaAllocator();
 
-    void        _SelectBestCPU();
+    void                 _QueryGPUInfos();
+    void                 _SelectBestCPU();
 
-    static bool _CheckVersion(u32 uNeedVersion);
-    static bool _CheckAndAddLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports, vector<const char*>& vUsed);
-    static bool _CheckLayer(const char* szName, u32 uCount, VkLayerProperties* pSupprots);
-    static bool _CheckAndAddExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports, vector<const char*>& vUsed);
-    static bool _CheckExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports);
-    static bool _DeviceBetterFunc(u32 uTestIndex, u32 uRefIndex, const VkPhysicalDeviceProperties2* pGPUProperties, const VkPhysicalDeviceMemoryProperties* pGPUMemoryProperties);
-    static bool _QueryGPUProperties(VkPhysicalDevice gpu, VkPhysicalDeviceProperties2* pProperties, VkPhysicalDeviceMemoryProperties* pMemProperties,
-                                    VkPhysicalDeviceFeatures2* pFeatures, VkQueueFamilyProperties** ppQueueFamilyProperties, u32* pQueueFamilyPropertyCount);
+    static EGPUVendor _GetGPUVendor(u32 uVendorId);
+    static bool          _CheckVersion(u32 uNeedVersion);
+    static bool          _CheckAndAddLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports, vector<const char*>& vUsed);
+    static bool          _CheckLayer(const char* szName, u32 uCount, VkLayerProperties* pSupprots);
+    static bool          _CheckAndAddExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports, vector<const char*>& vUsed);
+    static bool          _CheckExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports);
+    static bool          _DeviceBetterFunc(const GPUInfo& testInfo, const GPUInfo& refInfo);
 
   public:
     u32                         m_uInstanceSupportLayersCount     = 0;
@@ -48,29 +95,32 @@ class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
 
     vector<const char*>         m_vInstanceUsedLayers;
     vector<const char*>         m_vInstanceUsedExtensions;
+    vector<const char*>         m_vDeviceUsedExtensions;
 
-    bool                        m_bRaytracingSupported                    : 1;
-    bool                        m_bDedicatedAllocationExtension           : 1;
-    bool                        m_bGetMemoryRequirement2Extension         : 1;
-    bool                        m_bExternalMemoryExtension                : 1;
-    bool                        m_bExternalMemoryWin32Extension           : 1;
-    bool                        m_bDrawIndirectCountExtension             : 1;
-    bool                        m_bAMDDrawIndirectCountExtension          : 1;
-    bool                        m_bAMDGCNShaderExtension                  : 1;
-    bool                        m_bDescriptorIndexingExtension            : 1;
-    bool                        m_bShaderFloatControlsExtension           : 1;
-    bool                        m_bBufferDeviceAddressExtension           : 1;
-    bool                        m_bDeferredHostOperationsExtension        : 1;
-    bool                        m_bAccelerationStructureExtension         : 1;
-    bool                        m_bSpirv14Extension                       : 1;
-    bool                        m_bRayTracingPipelineExtension            : 1;
-    bool                        m_bRayQueryExtension                      : 1;
-    bool                        m_bSamplerYCbCrConversionExtension        : 1;
-    bool                        m_bFragmentShaderInterlockExtension       : 1;
-    bool                        m_bMultiviewExtension                     : 1;
-    bool                        m_bNvDeviceDiagnosticCheckpointsExtension : 1;
-    bool                        m_bNvDeviceDiagnosticsConfigExtension     : 1;
-    bool                        m_bDebugMarkerSupport                     : 1;
+    // 先不考虑多GPU模式了，手机不可能有。。。
+    // bool m_bGroupCreationExtension                 : 1;
+    bool m_bRaytracingSupported                    : 1;
+    bool m_bDedicatedAllocationExtension           : 1;
+    bool m_bGetMemoryRequirement2Extension         : 1;
+    bool m_bExternalMemoryExtension                : 1;
+    bool m_bExternalMemoryWin32Extension           : 1;
+    bool m_bDrawIndirectCountExtension             : 1;
+    bool m_bAMDDrawIndirectCountExtension          : 1;
+    bool m_bAMDGCNShaderExtension                  : 1;
+    bool m_bDescriptorIndexingExtension            : 1;
+    bool m_bShaderFloatControlsExtension           : 1;
+    bool m_bBufferDeviceAddressExtension           : 1;
+    bool m_bDeferredHostOperationsExtension        : 1;
+    bool m_bAccelerationStructureExtension         : 1;
+    bool m_bSpirv14Extension                       : 1;
+    bool m_bRayTracingPipelineExtension            : 1;
+    bool m_bRayQueryExtension                      : 1;
+    bool m_bSamplerYCbCrConversionExtension        : 1;
+    bool m_bFragmentShaderInterlockExtension       : 1;
+    bool m_bMultiviewExtension                     : 1;
+    bool m_bNvDeviceDiagnosticCheckpointsExtension : 1;
+    bool m_bNvDeviceDiagnosticsConfigExtension     : 1;
+    bool m_bDebugMarkerSupport                     : 1;
 
     union {
         struct
@@ -81,6 +131,9 @@ class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
         };
         u8 m_QueueFamilyIndices[3];
     };
+
+  public:
+    RendererInfo* m_pInfo;
 };
 
 extern RHIRenderer* RHIInitRendererVulkan(const RHIRendererDesc& desc);
