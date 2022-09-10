@@ -5,12 +5,12 @@
 #include "JokerRendererEnum.h"
 #include "JokerRendererType.h"
 
-#include "JokerRHIRenderer.h"
+#include "JokerRenderer.h"
 
-namespace joker
+namespace joker::rhi
 {
 
-extern RHIRenderer* RHIInitRenderer(const RHIRendererDesc& desc);
-extern void         RHIExitRenderer(RHIRenderer* pRenderer);
+extern Renderer* InitRenderer(const RendererDesc& desc);
+extern void      ExitRenderer(Renderer* pRenderer);
 
 }

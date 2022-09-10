@@ -1,9 +1,9 @@
 #pragma once
 
-namespace joker
+namespace joker::rhi
 {
 
-struct RHIRendererDesc
+struct RendererDesc
 {
     string szAppName;
     u32    uMaxQueueCount = 8;
@@ -12,12 +12,12 @@ struct RHIRendererDesc
     bool   bGPUDebug    : 1;
 };
 
-class JRHI_ALIGN RHIRenderer
+class JRHI_ALIGN Renderer
 {
   public:
-    virtual ~RHIRenderer();
+    virtual ~Renderer();
 
-    const RHIRendererDesc& GetDesc() const;
+    const RendererDesc& GetDesc() const;
 
     virtual n32            GetGPUCount() const              = 0;
     virtual n32            GetGPUUsingIndex() const         = 0;
@@ -26,18 +26,18 @@ class JRHI_ALIGN RHIRenderer
     virtual const string&  GetGPUModel(n32 idx = -1) const  = 0;
 
   protected:
-    RHIRenderer(const RHIRendererDesc& desc);
-    RHIRenderer() = delete;
+    Renderer(const RendererDesc& desc);
+    Renderer() = delete;
 
   protected:
-    RHIRendererDesc m_Desc;
+    RendererDesc m_Desc;
 
   public:
     void* m_pHWContext = nullptr;
     void* m_pHWDevice  = nullptr;
 };
 
-inline const RHIRendererDesc& RHIRenderer::GetDesc() const
+inline const RendererDesc& Renderer::GetDesc() const
 {
     return m_Desc;
 }

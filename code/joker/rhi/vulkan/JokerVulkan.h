@@ -20,12 +20,17 @@
 #define JRHI_VK_CHECK(exp) JASSERT(0 == (n32)(exp))
 #endif
 
-namespace joker
+namespace joker::rhi
+{
+    class Renderer;
+}
+
+namespace joker::rhi::vulkan
 {
 
-extern class RHIRenderer* g_pRendererVulkan;
+extern Renderer* g_pRendererVulkan;
 
 }
 
-#define JRHI_VK_INSTANCE (*(VkInstance*)(&joker::g_pRendererVulkan->m_pHWContext))
-#define JRHI_VK_DEVICE (*(VkDevice*)(&joker::g_pRendererVulkan->m_pHWDevice))
+#define JRHI_VK_INSTANCE (*(VkInstance*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWContext))
+#define JRHI_VK_DEVICE (*(VkDevice*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWDevice))

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "JokerRHIRenderer.h"
+#include "JokerRenderer.h"
 
-namespace joker
+namespace joker::rhi::vulkan
 {
 
 // TODO 回头把平时用不到的数据挪出去，减少对象大小
-class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
+class JRHI_ALIGN RendererVulkan final : public Renderer
 {
     struct GPUInfo
     {
@@ -47,8 +47,8 @@ class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
     };
 
   public:
-    RHIRendererVulkan(const RHIRendererDesc& desc);
-    virtual ~RHIRendererVulkan();
+    RendererVulkan(const RendererDesc& desc);
+    virtual ~RendererVulkan();
 
     void                  Init();
     void                  Exit();
@@ -60,20 +60,20 @@ class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
     virtual const string& GetGPUModel(n32 idx) const override;
 
   private:
-    void                 _CreateInstance();
-    void                 _CreateDevice();
-    void                 _CreateVmaAllocator();
+    void              _CreateInstance();
+    void              _CreateDevice();
+    void              _CreateVmaAllocator();
 
-    void                 _QueryGPUInfos();
-    void                 _SelectBestCPU();
+    void              _QueryGPUInfos();
+    void              _SelectBestCPU();
 
     static EGPUVendor _GetGPUVendor(u32 uVendorId);
-    static bool          _CheckVersion(u32 uNeedVersion);
-    static bool          _CheckAndAddLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports, vector<const char*>& vUsed);
-    static bool          _CheckLayer(const char* szName, u32 uCount, VkLayerProperties* pSupprots);
-    static bool          _CheckAndAddExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports, vector<const char*>& vUsed);
-    static bool          _CheckExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports);
-    static bool          _DeviceBetterFunc(const GPUInfo& testInfo, const GPUInfo& refInfo);
+    static bool       _CheckVersion(u32 uNeedVersion);
+    static bool       _CheckAndAddLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports, vector<const char*>& vUsed);
+    static bool       _CheckLayer(const char* szName, u32 uCount, VkLayerProperties* pSupprots);
+    static bool       _CheckAndAddExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports, vector<const char*>& vUsed);
+    static bool       _CheckExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports);
+    static bool       _DeviceBetterFunc(const GPUInfo& testInfo, const GPUInfo& refInfo);
 
   public:
     u32                         m_uInstanceSupportLayersCount     = 0;
@@ -136,7 +136,7 @@ class JRHI_ALIGN RHIRendererVulkan final : public RHIRenderer
     RendererInfo* m_pInfo;
 };
 
-extern RHIRenderer* RHIInitRendererVulkan(const RHIRendererDesc& desc);
-extern void         RHIExitRendererVulkan(RHIRenderer* pRenderer);
+extern Renderer* InitRendererVulkan(const RendererDesc& desc);
+extern void      ExitRendererVulkan(Renderer* pRenderer);
 
 }

@@ -1,18 +1,18 @@
 #include "JokerRHIPCH.h"
 #include "JokerRHI.h"
-#include "vulkan/JokerRHIRendererVulkan.h"
+#include "vulkan/JokerRendererVulkan.h"
 
-namespace joker
+namespace joker::rhi
 {
 
-RHIRenderer* RHIInitRenderer(const RHIRendererDesc& desc)
+Renderer* InitRenderer(const RendererDesc& desc)
 {
-    return RHIInitRendererVulkan(desc);
+    return joker::rhi::vulkan::InitRendererVulkan(desc);
 }
 
-void RHIExitRenderer(RHIRenderer* pRenderer)
+void ExitRenderer(Renderer* pRenderer)
 {
-    RHIExitRendererVulkan(pRenderer);
+    joker::rhi::vulkan::ExitRendererVulkan(pRenderer);
 }
 
 }

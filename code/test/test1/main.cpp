@@ -88,12 +88,12 @@ int main(int argc, char *argv[])
     // desc.m_szName = "test";
     // joker::rhi::Renderer* pRenderer;
     // joker::rhi::InitRenderer(&desc, &pRenderer);
-    joker::RHIRendererDesc desc;
+    joker::rhi::RendererDesc desc;
     desc.szAppName = "test";
     desc.bUseAllQueue = false;
     desc.bCPUDebug = true;
     desc.bGPUDebug = false;
-    auto pRenderer = joker::RHIInitRenderer(desc);
+    auto pRenderer = joker::rhi::InitRenderer(desc);
 
     joker::vector<int> haha;
     haha.push_back(1);
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 
     engine.cleanup();
 
-    joker::RHIExitRenderer(pRenderer);
+    joker::rhi::ExitRenderer(pRenderer);
 
     // joker::rhi::ExitRenderer(pRenderer);
     // joker::rhi::ExitRendererContext(pContext);
