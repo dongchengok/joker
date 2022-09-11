@@ -1,25 +1,21 @@
 #pragma once
 
 #if defined(JOPTION_RHI_MULTI)
-#define JDECL_RHI_FUNC(ret, name, ...)                                                                                                                                             \
+#define JRHI_DECL_FUNC(ret, name, ...)                                                                                                                                             \
     typedef ret (*name##Fn)(__VA_ARGS__);                                                                                                                                          \
     extern name##Fn name;
-#define JIMPL_RHI_FUNC(ret, name, ...)           name##Fn name;
-#define JIMPL_RHI_FUNC_API(ret, type, name, ...) ret name##type(__VA_ARGS__);
+#define JRHI_IMPL_FUNC(ret, name, ...)           name##Fn name;
+#define JRHI_IMPL_FUNC_API(ret, type, name, ...) ret name##type(__VA_ARGS__);
 #else
-#define JDECL_RHI_FUNC(ret, name, ...) extern ret name(__VA_ARGS__);
-#define JIMPL_RHI_FUNC(ret, name, ...)
+#define JRHI_DECL_FUNC(ret, name, ...) extern ret name(__VA_ARGS__);
+#define JRHI_IMPL_FUNC(ret, name, ...)
+#define JRHI_IMPL_FUNC_API(ret, type, name, ...) ret name(__VA_ARGS__)
 #endif
 
 #define JRHI_ALIGN alignas(alignof(void*))
 
-
-namespace joker
+namespace joker::rhi
 {
-
-struct RHIRendererDesc;
-
-class RHIRenderer;
 
 // struct RHIRendererContextDesc;
 // struct RHIRendererContext;

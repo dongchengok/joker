@@ -1,12 +1,13 @@
 #pragma once
 
-#include "JokerRenderer.h"
+#include "JokerVulkan.h"
+#include "JokerDevice.h"
 
 namespace joker::rhi::vulkan
 {
 
 // TODO 回头把平时用不到的数据挪出去，减少对象大小
-class JRHI_ALIGN RendererVulkan final : public Renderer
+class JRHI_ALIGN DeviceVulkan final : public Device
 {
     struct GPUInfo
     {
@@ -39,7 +40,7 @@ class JRHI_ALIGN RendererVulkan final : public Renderer
         u32                  bHDRSupported            : 1;
         bool                 bValid                   : 1;
     };
-    struct RendererInfo
+    struct DeviceInfo
     {
         u32                    uUsingGPUIndex;
         vector<GPUInfo>        vGPUs;
@@ -47,8 +48,8 @@ class JRHI_ALIGN RendererVulkan final : public Renderer
     };
 
   public:
-    RendererVulkan(const RendererDesc& desc);
-    virtual ~RendererVulkan();
+    DeviceVulkan(const DeviceDesc& desc);
+    virtual ~DeviceVulkan();
 
     void                  Init();
     void                  Exit();
@@ -125,18 +126,19 @@ class JRHI_ALIGN RendererVulkan final : public Renderer
     union {
         struct
         {
+            u8 m_uPresentQueueFamilyIndex;
             u8 m_uGraphicsQueueFamilyIndex;
             u8 m_uTransferQueueFamilyIndex;
             u8 m_uComputeQueueFamilyIndex;
         };
-        u8 m_QueueFamilyIndices[3];
+        u8 m_QueueFamilyIndices[4];
     };
 
   public:
-    RendererInfo* m_pInfo;
+    DeviceInfo* m_pInfo;
 };
 
-extern Renderer* InitRendererVulkan(const RendererDesc& desc);
-extern void      ExitRendererVulkan(Renderer* pRenderer);
+extern Device* InitDeviceVulkan(const DeviceDesc& desc);
+extern void    ExitDeviceVulkan(Device* pRenderer);
 
 }

@@ -20,17 +20,34 @@
 #define JRHI_VK_CHECK(exp) JASSERT(0 == (n32)(exp))
 #endif
 
-namespace joker::rhi
-{
-    class Renderer;
-}
+#ifndef JRHI_SDL_CHECK
+#define JRHI_SDL_CHECK(exp)                                                                                                                                                        \
+    if (exp == 0)                                                                                                                                                                  \
+    {                                                                                                                                                                              \
+        JLOG_CRITICAL(SDL_GetError());                                                                                                                                             \
+        JASSERT(0);                                                                                                                                                                \
+    }
+#endif
+
+#if defined(JOPTION_RHI_MULTI)
+#else
+#define JRHI_IMPL_FUNC_VK(ret, name, ...) JRHI_IMPL_FUNC_API(ret, VK, name, __VA_ARGS__)
+#endif
 
 namespace joker::rhi::vulkan
 {
 
-extern Renderer* g_pRendererVulkan;
+extern class DeviceVulkan* g_pRendererVulkan;
 
 }
 
 #define JRHI_VK_INSTANCE (*(VkInstance*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWContext))
-#define JRHI_VK_DEVICE (*(VkDevice*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWDevice))
+#define JRHI_VK_DEVICE   (*(VkDevice*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWDevice))
+#define JRHI_VK_GPU      (joker::rhi::vulkan::g_pRendererVulkan->m_hVkActiveDevice)
+#define JRHI_VK_ALLOC    (g_pRendererVulkan->m_pVkAllocationCallbacks)
+
+#define JRHI_VK_DESC(type, var, stype)                                                                                                                                             \
+    type var;                                                                                                                                                                      \
+    JCLEAR(var, type);                                                                                                                                                             \
+    var.sType = stype;                                                                                                                                                             \
+    var.pNext = nullptr;

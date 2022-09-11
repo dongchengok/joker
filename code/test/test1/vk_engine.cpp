@@ -2,6 +2,7 @@
 #include "vk_engine.h"
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 
 void VulkanEngine::init()
 {

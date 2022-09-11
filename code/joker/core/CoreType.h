@@ -92,12 +92,14 @@ static_assert(sizeof(f64) == 8, "Wrong type size!");
 
 #include <stdlib.h>
 #include <malloc.h>
-#define JCLEAR(src, value)                         memset(src, 0, value)
+#define JCLEAR(src, type)                         memset(&src, 0, sizeof(type))
 #define JMALLOC(size)                              malloc(size)
 #define JMALLOC_ALIGNED(count, aligned_size, size) malloc(count* size)
 #define JCALLOC(count, size)                       calloc(count, size)
 #define JCALLOC_ALIGNED(count, aligned_size, size) calloc(count, size)
 #define JALLOCA(size)                              alloca(size)
+#define JNEW                                       new
+#define JDELETE                                    delete
 #define JFREE(ptr)                                                                                                                                                                 \
     if (ptr)                                                                                                                                                                       \
     {                                                                                                                                                                              \

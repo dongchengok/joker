@@ -1,18 +1,21 @@
 #include "JokerRHIPCH.h"
 #include "JokerRHI.h"
-#include "vulkan/JokerRendererVulkan.h"
+#include "vulkan/JokerDeviceVulkan.h"
 
 namespace joker::rhi
 {
 
-Renderer* InitRenderer(const RendererDesc& desc)
+Device* InitDevice(const DeviceDesc& desc)
 {
-    return joker::rhi::vulkan::InitRendererVulkan(desc);
+    return joker::rhi::vulkan::InitDeviceVulkan(desc);
 }
 
-void ExitRenderer(Renderer* pRenderer)
+void ExitDevice(Device* pRenderer)
 {
-    joker::rhi::vulkan::ExitRendererVulkan(pRenderer);
+    joker::rhi::vulkan::ExitDeviceVulkan(pRenderer);
 }
+
+JRHI_IMPL_FUNC(SwapChain*, AddSwapChain, const SwapChainDesc&);
+JRHI_IMPL_FUNC(void, RemoveSwapChain, SwapChain*);
 
 }

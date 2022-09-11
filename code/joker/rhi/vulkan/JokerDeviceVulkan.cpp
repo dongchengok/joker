@@ -1,11 +1,10 @@
 #include "JokerRHIPCH.h"
-#include "JokerRendererVulkan.h"
-#include "JokerVulkan.h"
+#include "JokerDeviceVulkan.h"
 
 namespace joker::rhi::vulkan
 {
 
-Renderer*              g_pRendererVulkan = nullptr;
+DeviceVulkan*             g_pRendererVulkan = nullptr;
 
 static VkBool32 VKAPI_PTR _vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
                                                          const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
@@ -24,43 +23,40 @@ static VkBool32 VKAPI_PTR _vkDebugUtilsMessengerCallback(VkDebugUtilsMessageSeve
     else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
     {
         JLOG_ERROR("[{}] : {} ({})", pLayerPrefix, pMessage, messageCode);
-        JASSERT(false);
     }
 
     return VK_FALSE;
 }
 
-Renderer* InitRendererVulkan(const RendererDesc& desc)
+Device* InitDeviceVulkan(const DeviceDesc& desc)
 {
     JASSERT(g_pRendererVulkan == nullptr);
-    RendererVulkan* pVulkan = new RendererVulkan(desc);
-    g_pRendererVulkan          = pVulkan;
-    pVulkan->Init();
+    g_pRendererVulkan = new DeviceVulkan(desc);
+    g_pRendererVulkan->Init();
     return g_pRendererVulkan;
 }
 
-void ExitRendererVulkan(Renderer* pRenderer)
+void ExitDeviceVulkan(Device* pRenderer)
 {
     JASSERT(g_pRendererVulkan == pRenderer);
-    RendererVulkan* pVulkan = (RendererVulkan*)g_pRendererVulkan;
-    pVulkan->Exit();
-    delete pRenderer;
+    g_pRendererVulkan->Exit();
+    delete g_pRendererVulkan;
     g_pRendererVulkan = nullptr;
 }
 
-RendererVulkan::RendererVulkan(const RendererDesc& desc) : Renderer(desc)
+DeviceVulkan::DeviceVulkan(const DeviceDesc& desc) : Device(desc)
 {
-    m_pInfo = new RendererInfo();
+    m_pInfo = new DeviceInfo();
 }
 
-RendererVulkan::~RendererVulkan()
+DeviceVulkan::~DeviceVulkan()
 {
     delete m_pInfo;
     delete[] m_pInstanceSupportLayers;
     delete[] m_pInstanceSupportExtensions;
 }
 
-void RendererVulkan::Init()
+void DeviceVulkan::Init()
 {
     _CreateInstance();
     _QueryGPUInfos();
@@ -68,7 +64,7 @@ void RendererVulkan::Init()
     _CreateDevice();
 }
 
-void RendererVulkan::Exit()
+void DeviceVulkan::Exit()
 {
     vkDestroyDevice(JRHI_VK_DEVICE, m_pInfo->pAllocationCallbacks);
     if (m_hVkDebugMessenger)
@@ -78,32 +74,32 @@ void RendererVulkan::Exit()
     vkDestroyInstance(JRHI_VK_INSTANCE, m_pInfo->pAllocationCallbacks);
 }
 
-n32 RendererVulkan::GetGPUCount() const
+n32 DeviceVulkan::GetGPUCount() const
 {
     return (n32)m_pInfo->vGPUs.size();
 }
 
-n32 RendererVulkan::GetGPUUsingIndex() const
+n32 DeviceVulkan::GetGPUUsingIndex() const
 {
     return (n32)m_pInfo->uUsingGPUIndex;
 }
 
-const string& RendererVulkan::GetGPUName(n32 idx) const
+const string& DeviceVulkan::GetGPUName(n32 idx) const
 {
     return m_pInfo->vGPUs[idx].szGPUName;
 }
 
-const string& RendererVulkan::GetGPUVendor(n32 idx) const
+const string& DeviceVulkan::GetGPUVendor(n32 idx) const
 {
     return m_pInfo->vGPUs[idx].szVendor;
 }
 
-const string& RendererVulkan::GetGPUModel(n32 idx) const
+const string& DeviceVulkan::GetGPUModel(n32 idx) const
 {
     return m_pInfo->vGPUs[idx].szModel;
 }
 
-void RendererVulkan::_CreateInstance()
+void DeviceVulkan::_CreateInstance()
 {
     volkInitialize();
 
@@ -132,6 +128,14 @@ void RendererVulkan::_CreateInstance()
         _CheckAndAddExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
     }
     _CheckVersion(VK_VERSION_1_1);
+
+    // 这俩扩展肯定少不了思密达，创建窗口用
+    _CheckAndAddExtension(VK_KHR_SURFACE_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
+    _CheckAndAddExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
+    // swapchain的颜色空间
+    _CheckAndAddExtension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
+    // 立即模式需要扩展
+    _CheckAndAddExtension(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
 
     // feature开关，是否允许校验层检查gpu错误
     VkValidationFeaturesEXT validationFeaturesExt{};
@@ -170,7 +174,7 @@ void RendererVulkan::_CreateInstance()
     JRHI_VK_CHECK(vkCreateInstance(&createInfo, nullptr, (VkInstance*)&m_pHWContext));
 
     // 必须加载instance的接口
-    volkLoadInstanceOnly(*(VkInstance*)(&m_pHWContext));
+    volkLoadInstanceOnly(JRHI_VK_INSTANCE);
 
     if (m_Desc.bCPUDebug && _CheckExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions))
     {
@@ -186,7 +190,7 @@ void RendererVulkan::_CreateInstance()
     }
 }
 
-void RendererVulkan::_CreateDevice()
+void DeviceVulkan::_CreateDevice()
 {
     u32 uLayerCount = 0;
     u32 uExtCount   = 0;
@@ -204,6 +208,9 @@ void RendererVulkan::_CreateDevice()
     {
         JLOG_INFO("Device VkExtensionProperties {}: {}", i, pExts[i].extensionName);
     }
+
+    //木有swapchain木有办法显示肯定要有思密达
+    _CheckAndAddExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, uExtCount, pExts, m_vDeviceUsedExtensions);
 
     // vkEnumerateDeviceExtensionProperties(pRenderer->Vulkan.m_hVkActiveGPU, szLayerName, &uCount, nullptr);
     m_bDedicatedAllocationExtension           = _CheckAndAddExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME, uExtCount, pExts, m_vDeviceUsedExtensions);
@@ -318,7 +325,7 @@ void RendererVulkan::_CreateDevice()
     volkLoadDevice(JRHI_VK_DEVICE);
 }
 
-void RendererVulkan::_CreateVmaAllocator()
+void DeviceVulkan::_CreateVmaAllocator()
 {
     VmaAllocatorCreateInfo createInfo = {0};
     createInfo.device                 = JRHI_VK_DEVICE;
@@ -383,7 +390,7 @@ void RendererVulkan::_CreateVmaAllocator()
     vmaCreateAllocator(&createInfo, &m_pVmaAllocator);
 }
 
-void RendererVulkan::_SelectBestCPU()
+void DeviceVulkan::_SelectBestCPU()
 {
     m_pInfo->uUsingGPUIndex = UINT32_MAX;
     for (u32 i = 0; i < m_uDeviceCount; ++i)
@@ -406,7 +413,7 @@ void RendererVulkan::_SelectBestCPU()
     JLOG_INFO("Vulkan api version of selected gpu: {}.{}.{}", VK_VERSION_MAJOR(gpu.uApiVersion), VK_VERSION_MINOR(gpu.uApiVersion), VK_VERSION_PATCH(gpu.uApiVersion));
 }
 
-bool RendererVulkan::_CheckVersion(u32 uNeedVersion)
+bool DeviceVulkan::_CheckVersion(u32 uNeedVersion)
 {
     u32 uVersion;
     vkEnumerateInstanceVersion(&uVersion);
@@ -420,7 +427,7 @@ bool RendererVulkan::_CheckVersion(u32 uNeedVersion)
     return false;
 }
 
-bool RendererVulkan::_CheckLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports)
+bool DeviceVulkan::_CheckLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports)
 {
     for (u32 i = 0; i < uCount; ++i)
     {
@@ -432,7 +439,7 @@ bool RendererVulkan::_CheckLayer(const char* szName, u32 uCount, VkLayerProperti
     return false;
 }
 
-bool RendererVulkan::_CheckAndAddLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports, vector<const char*>& vUsed)
+bool DeviceVulkan::_CheckAndAddLayer(const char* szName, u32 uCount, VkLayerProperties* pSupports, vector<const char*>& vUsed)
 {
     for (auto v : vUsed)
     {
@@ -452,7 +459,7 @@ bool RendererVulkan::_CheckAndAddLayer(const char* szName, u32 uCount, VkLayerPr
     return false;
 }
 
-bool RendererVulkan::_CheckExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports)
+bool DeviceVulkan::_CheckExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports)
 {
     for (u32 i = 0; i < uCount; ++i)
     {
@@ -464,7 +471,7 @@ bool RendererVulkan::_CheckExtension(const char* szName, u32 uCount, VkExtension
     return false;
 }
 
-bool RendererVulkan::_CheckAndAddExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports, vector<const char*>& vUsed)
+bool DeviceVulkan::_CheckAndAddExtension(const char* szName, u32 uCount, VkExtensionProperties* pSupports, vector<const char*>& vUsed)
 {
     for (auto v : vUsed)
     {
@@ -484,7 +491,7 @@ bool RendererVulkan::_CheckAndAddExtension(const char* szName, u32 uCount, VkExt
     return false;
 }
 
-EGPUVendor RendererVulkan::_GetGPUVendor(u32 uVendorId)
+EGPUVendor DeviceVulkan::_GetGPUVendor(u32 uVendorId)
 {
     constexpr u32 _kVkVendorIDNvidia = 0x10DE;
     constexpr u32 _kVkVendorIDAmd    = 0x1002;
@@ -511,7 +518,7 @@ EGPUVendor RendererVulkan::_GetGPUVendor(u32 uVendorId)
     }
 }
 
-void RendererVulkan::_QueryGPUInfos()
+void DeviceVulkan::_QueryGPUInfos()
 {
     JRHI_VK_CHECK(vkEnumeratePhysicalDevices(JRHI_VK_INSTANCE, &m_uDeviceCount, nullptr));
     VkPhysicalDevice* pGPUs = (VkPhysicalDevice*)alloca(m_uDeviceCount * sizeof(VkPhysicalDevice));
@@ -640,7 +647,7 @@ void RendererVulkan::_QueryGPUInfos()
     }
 }
 
-bool RendererVulkan::_DeviceBetterFunc(const GPUInfo& testGPU, const GPUInfo& refGPU)
+bool DeviceVulkan::_DeviceBetterFunc(const GPUInfo& testGPU, const GPUInfo& refGPU)
 {
     if (!testGPU.bValid)
     {

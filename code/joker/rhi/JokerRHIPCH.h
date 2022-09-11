@@ -1,7 +1,10 @@
 #pragma once
 
 #include <JokerCore.h>
-#include "JokerRendererEnum.h"
-#include "JokerRendererType.h"
+#include "JokerRHIEnum.h"
+#include "JokerRHIType.h"
 
-#include "vulkan/JokerVulkan.h"
+#include "JokerDevice.h"
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
