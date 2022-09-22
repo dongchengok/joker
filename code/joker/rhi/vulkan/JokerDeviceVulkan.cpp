@@ -44,8 +44,9 @@ void ExitDeviceVulkan(Device* pRenderer)
     g_pRendererVulkan = nullptr;
 }
 
-DeviceVulkan::DeviceVulkan(const DeviceDesc& desc) : Device(desc)
+DeviceVulkan::DeviceVulkan(const DeviceDesc& desc)
 {
+    m_Desc  = desc;
     m_pInfo = new DeviceInfo();
 }
 
@@ -99,6 +100,95 @@ const string& DeviceVulkan::GetGPUModel(n32 idx) const
     return m_pInfo->vGPUs[idx].szModel;
 }
 
+bool DeviceVulkan::AcquireQueue(EQueueType eType, u32& uFamilyIndex, u32& uIndex)
+{
+    // 图形队列的话返回队列0
+    if (eType == EQueueType::Graphics)
+    {
+        for (u32 i = 0; i < m_pInfo->vQueueInfo.size(); ++i)
+        {
+            DeviceQueueFamilyInfo& info = m_pInfo->vQueueInfo[i];
+            if (info.uFamilyFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                uFamilyIndex = i;
+                uIndex       = 0;
+                return true;
+            }
+        }
+    }
+    else
+    {
+        // 如果不是图形队列，尽量找专用队列
+        u32 uFlags = EQueueType::Compute == eType ? VK_QUEUE_COMPUTE_BIT : VK_QUEUE_TRANSFER_BIT;
+        for (u32 i = 0; i < m_pInfo->vQueueInfo.size(); ++i)
+        {
+            DeviceQueueFamilyInfo& info = m_pInfo->vQueueInfo[i];
+            if (info.uFamilyFlags == uFlags)
+            {
+                for (u32 j = 0; j < info.vQueueUsedState.size(); ++j)
+                {
+                    if (!info.vQueueUsedState[j])
+                    {
+                        info.vQueueUsedState[j] = true;
+                        uFamilyIndex            = i;
+                        uIndex                  = j;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 找不到专用队列找不带有图形的通用队列
+        for (u32 i = 0; i < m_pInfo->vQueueInfo.size(); ++i)
+        {
+            DeviceQueueFamilyInfo& info = m_pInfo->vQueueInfo[i];
+            if ((info.uFamilyFlags & uFlags) != 0 && (info.uFamilyFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+            {
+                for (u32 j = 0; j < info.vQueueUsedState.size(); ++j)
+                {
+                    if (!info.vQueueUsedState[j])
+                    {
+                        info.vQueueUsedState[j] = true;
+                        uFamilyIndex            = i;
+                        uIndex                  = j;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 没有专用队列就随便找一个
+        for (u32 i = 0; i < m_pInfo->vQueueInfo.size(); ++i)
+        {
+            DeviceQueueFamilyInfo& info = m_pInfo->vQueueInfo[i];
+            if (info.uFamilyFlags & uFlags)
+            {
+                for (u32 j = 0; j < info.vQueueUsedState.size(); ++j)
+                {
+                    if (!info.vQueueUsedState[j])
+                    {
+                        info.vQueueUsedState[j] = true;
+                        uFamilyIndex            = i;
+                        uIndex                  = j;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void DeviceVulkan::ReleaseQueue(EQueueType eType, u32 uFamilyIndex, u32 uIndex)
+{
+    if (eType == EQueueType::Graphics)
+    {
+        return;
+    }
+    JASSERT(m_pInfo->vQueueInfo[uFamilyIndex].vQueueUsedState[uIndex]);
+    m_pInfo->vQueueInfo[uFamilyIndex].vQueueUsedState[uIndex] = false;
+}
+
 void DeviceVulkan::_CreateInstance()
 {
     volkInitialize();
@@ -134,8 +224,6 @@ void DeviceVulkan::_CreateInstance()
     _CheckAndAddExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
     // swapchain的颜色空间
     _CheckAndAddExtension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
-    // 立即模式需要扩展
-    _CheckAndAddExtension(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME, m_uInstanceSupportExtensionsCount, m_pInstanceSupportExtensions, m_vInstanceUsedExtensions);
 
     // feature开关，是否允许校验层检查gpu错误
     VkValidationFeaturesEXT validationFeaturesExt{};
@@ -171,7 +259,7 @@ void DeviceVulkan::_CreateInstance()
     createInfo.ppEnabledLayerNames     = m_vInstanceUsedLayers.data();
     createInfo.enabledExtensionCount   = (u32)m_vInstanceUsedExtensions.size();
     createInfo.ppEnabledExtensionNames = m_vInstanceUsedExtensions.data();
-    JRHI_VK_CHECK(vkCreateInstance(&createInfo, nullptr, (VkInstance*)&m_pHWContext));
+    JRHI_VK_CHECK(vkCreateInstance(&createInfo, nullptr, (VkInstance*)&m_HandleContext));
 
     // 必须加载instance的接口
     volkLoadInstanceOnly(JRHI_VK_INSTANCE);
@@ -286,17 +374,20 @@ void DeviceVulkan::_CreateDevice()
     VkDeviceQueueCreateInfo* pQeueuCreateInfos      = (VkDeviceQueueCreateInfo*)JALLOCA(uQueueFamiliesCount * sizeof(VkDeviceQueueCreateInfo));
 
     // 队列优先级，vk好像可以把其它的队列饿死
+    // 使用的队列不能小于这里创建的
     float* pPriorities = (float*)JALLOCA(sizeof(float) * m_Desc.uMaxQueueCount);
     memset(pPriorities, 0, sizeof(float) * m_Desc.uMaxQueueCount);
-    for (u32 i = 0; i < uQueueFamiliesCount; i++)
+    m_pInfo->vQueueInfo.resize(uQueueFamiliesCount);
+    for (u32 i = 0; i < uQueueFamiliesCount; ++i)
     {
-        u32 uQueueCount = pQueueFamiliesProperties[i].queueCount;
+        VkQueueFamilyProperties& prop        = pQueueFamiliesProperties[i];
+        u32                      uQueueCount = prop.queueCount;
         if (uQueueCount > 0)
         {
-            if (uQueueCount > 1 && !m_Desc.bUseAllQueue)
-            {
-                uQueueCount = 1;
-            }
+            DeviceQueueFamilyInfo& info = m_pInfo->vQueueInfo[i];
+            info.uFamilyFlags           = prop.queueFlags;
+            info.vQueueUsedState.resize(prop.queueCount, false);
+
             pQeueuCreateInfos[uQueueCreateInfosCount]                  = {};
             pQeueuCreateInfos[uQueueCreateInfosCount].sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             pQeueuCreateInfos[uQueueCreateInfosCount].pNext            = NULL;
@@ -320,7 +411,7 @@ void DeviceVulkan::_CreateDevice()
     createInfo.ppEnabledExtensionNames = m_vDeviceUsedExtensions.data();
     createInfo.pEnabledFeatures        = nullptr;
 
-    JRHI_VK_CHECK(vkCreateDevice(m_hVkActiveDevice, &createInfo, m_pInfo->pAllocationCallbacks, (VkDevice*)&m_pHWDevice));
+    JRHI_VK_CHECK(vkCreateDevice(m_hVkActiveDevice, &createInfo, m_pInfo->pAllocationCallbacks, (VkDevice*)&m_HandleDevice));
 
     volkLoadDevice(JRHI_VK_DEVICE);
 }

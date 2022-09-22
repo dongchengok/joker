@@ -72,7 +72,6 @@ int main(int argc, char *argv[])
 
     joker::rhi::DeviceDesc desc;
     desc.szAppName = "test";
-    desc.bUseAllQueue = false;
     desc.bCPUDebug = true;
     desc.bGPUDebug = false;
     auto pRenderer = joker::rhi::InitDevice(desc);
@@ -80,6 +79,13 @@ int main(int argc, char *argv[])
     descSwapChain.pWindow = engine._window;
     auto pSwapChain = joker::rhi::AddSwapChain(descSwapChain);
 
+    joker::rhi::QueueDesc descQueue;
+    descQueue.eType = joker::rhi::EQueueType::Graphics;
+    joker::rhi::AddQueue(descQueue);
+    descQueue.eType = joker::rhi::EQueueType::Compute;
+    joker::rhi::AddQueue(descQueue);
+    descQueue.eType = joker::rhi::EQueueType::Transfer;
+    joker::rhi::AddQueue(descQueue);
 
     engine.run();
 

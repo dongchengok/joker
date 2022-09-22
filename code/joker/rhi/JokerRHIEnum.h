@@ -46,12 +46,30 @@
         return e != (ENUM_TYPE)0;                                                                                                                                                  \
     }
 
-namespace joker
+namespace joker::rhi
 {
 enum class ERenderer
 {
     Null,
     Vulkan,
+};
+
+enum class EColorSpace
+{
+    sRGB,
+    HDR10,
+    P3,
+    BT709,
+    BT2020,
+    AdobeRGB,
+    DolbVision,
+};
+
+enum class EQueueType
+{
+    Graphics,
+    Compute,
+    Transfer,
 };
 
 enum class EGPUType
@@ -141,19 +159,27 @@ enum class EGPUVendor
     Count,
 };
 
-enum class ETextureDimension
+enum class ETextureDimension : u8
 {
-    D1,
-    D2,
-    D2MS,
-    D3,
-    Cube,
-    D1Array,
-    D2Array,
-    D2MSArray,
-    CubeArray,
-    Count,
+    Texture1D,
+    Texture1DArray,
+    Texture2D,
+    Texture2DArray,
+    Texture3D,
+    TextureCube,
+    TextureCubeArray,
     Undefined,
+};
+
+enum class ETextureCreateFlags : u32
+{
+    None               = 0_bit,
+    RenderTarget       = 1_bit,
+    ResolveTarget      = 2_bit,
+    DepthStencilTarget = 3_bit,
+    ShaderResource     = 4_bit,
+    sRGB               = 5_bit,
+    MemoryLess         = 6_bit,
 };
 
 enum class EGPUMode
@@ -172,6 +198,42 @@ enum class EShaderMode
     SM_6_2,
     SM_6_3, //光追需要
     SM_6_4, // VRS需要
+};
+
+enum class ELoadAction : u8
+{
+    NoAction,
+    Load,
+    Clear,
+};
+
+enum class EStoreAction : u8
+{
+    NoAction,
+    Store,
+    MultisampleResolve,
+};
+
+enum class ESubpassHint : u8
+{
+    None,
+    DepthRead,
+    DeferredShading,
+};
+
+enum class EPixelFormat : u8
+{
+    UNKNOWN = 0,
+    ASTC_4x4,
+    ASTC_6x6,
+    ASTC_8x8,
+    ASTC_10x10,
+    ASTC_12x12,
+    ASTC_4x4_HDR,
+    ASTC_6x6_HDR,
+    ASTC_8x8_HDR,
+    ASTC_10x10_HDR,
+    ASTC_12x12_HDR,
 };
 
 }

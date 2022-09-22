@@ -21,18 +21,19 @@ JRHI_IMPL_FUNC_VK(void, RemoveSwapChain, SwapChain* pSwapChain)
 namespace joker::rhi::vulkan
 {
 
-SwapChainVulkan::SwapChainVulkan(const SwapChainDesc& desc) : SwapChain(desc)
+SwapChainVulkan::SwapChainVulkan(const SwapChainDesc& desc)
 {
+    m_pDesc = JNEW SwapChainDesc(desc);
     SDL_Window* pWindow = (SDL_Window*)desc.pWindow;
     JASSERT(pWindow);
     VkSurfaceKHR surface;
     JRHI_SDL_CHECK(SDL_Vulkan_CreateSurface(pWindow, JRHI_VK_INSTANCE, &surface));
-    *(VkSurfaceKHR*)&m_pHWSurface = surface;
+    *(VkSurfaceKHR*)&m_HandleSurface = surface;
     VkSurfaceCapabilitiesKHR caps;
     JRHI_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(JRHI_VK_GPU, surface, &caps));
 
     m_pDesc->nImageCount                      = JCLAMP(m_pDesc->nImageCount, caps.minImageCount, caps.maxImageCount);
-    VkSurfaceFormatKHR          surfaceFormat = _SelectSurfaceFomrat(*m_pDesc, surface);
+    VkSurfaceFormatKHR          surfaceFormat = _SelectSurfaceFomrat(desc, surface);
     VkPresentModeKHR            presentMode   = _SelectPresentMode(desc, surface);
     VkExtent2D                  extent        = _SelectExtent(desc, caps);
     VkCompositeAlphaFlagBitsKHR alpha         = _SelectCompositeAlpha(caps);
@@ -59,16 +60,17 @@ SwapChainVulkan::SwapChainVulkan(const SwapChainDesc& desc) : SwapChain(desc)
     infoSwapChain.presentMode           = presentMode;
     infoSwapChain.clipped               = VK_TRUE;
     infoSwapChain.oldSwapchain          = VK_NULL_HANDLE;
-    JRHI_VK_CHECK(vkCreateSwapchainKHR(JRHI_VK_DEVICE, &infoSwapChain, JRHI_VK_ALLOC, (VkSwapchainKHR*)&m_pHWSwapChain));
+    JRHI_VK_CHECK(vkCreateSwapchainKHR(JRHI_VK_DEVICE, &infoSwapChain, JRHI_VK_ALLOC, (VkSwapchainKHR*)&m_HandleSwapChain));
 }
 
 SwapChainVulkan::~SwapChainVulkan()
 {
-    vkDestroySwapchainKHR(JRHI_VK_DEVICE, (VkSwapchainKHR)m_pHWSwapChain, JRHI_VK_ALLOC);
-    vkDestroySurfaceKHR(JRHI_VK_INSTANCE, *(VkSurfaceKHR*)&m_pHWSurface, JRHI_VK_ALLOC);
+    vkDestroySwapchainKHR(JRHI_VK_DEVICE, (VkSwapchainKHR)m_HandleSwapChain, JRHI_VK_ALLOC);
+    vkDestroySurfaceKHR(JRHI_VK_INSTANCE, *(VkSurfaceKHR*)&m_HandleSurface, JRHI_VK_ALLOC);
+    JDELETE m_pDesc;
 }
 
-VkSurfaceFormatKHR SwapChainVulkan::_SelectSurfaceFomrat(SwapChainDesc& desc, VkSurfaceKHR surface)
+VkSurfaceFormatKHR SwapChainVulkan::_SelectSurfaceFomrat(const SwapChainDesc& desc, VkSurfaceKHR surface)
 {
     u32 uSupportFormatCount = 0;
     JRHI_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(JRHI_VK_GPU, surface, &uSupportFormatCount, nullptr));
@@ -76,32 +78,65 @@ VkSurfaceFormatKHR SwapChainVulkan::_SelectSurfaceFomrat(SwapChainDesc& desc, Vk
     VkSurfaceFormatKHR* pFormats = (VkSurfaceFormatKHR*)JALLOCA(uSupportFormatCount * sizeof(VkSurfaceFormatKHR));
     JRHI_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(JRHI_VK_GPU, surface, &uSupportFormatCount, pFormats));
 
-    // TODO SRGB LINER UNIFORM
-
     // 优先使用
-    // 1.HDR VK_FORMAT_A2B10G10R10_UNORM_PACK32 VK_COLOR_SPACE_HDR10_ST2084_EXT 提高性能，并且支持HDR
+    // 1.VK_FORMAT_A2B10G10R10_UNORM_PACK32 VK_COLOR_SPACE_HDR10_ST2084_EXT 提高性能
+    // 1.VK_FORMAT_A2B10G10R10_UNORM_PACK32 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR 提高性能
     // 2.VK_FORMAT_B8G8R8A8_SRGB VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-    // 3.VK_FORMAT_B8G8R8A8_UNORM VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-    // 在没有的话随便选一个
+    // 2.VK_FORMAT_B8G8R8A8_UNORM VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+    VkColorSpaceKHR colorSpace;
+    switch(desc.eColorSpace)
+    {
+        case EColorSpace::sRGB:
+            colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            break;
+        case EColorSpace::HDR10:
+            colorSpace = VK_COLOR_SPACE_HDR10_ST2084_EXT;
+            break;
+        case EColorSpace::P3:
+            colorSpace = VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT;
+            break;
+        case EColorSpace::BT709:
+            colorSpace = VK_COLOR_SPACE_BT709_LINEAR_EXT;
+            break;
+        case EColorSpace::BT2020:
+            colorSpace = VK_COLOR_SPACE_BT2020_LINEAR_EXT;
+            break;
+        case EColorSpace::AdobeRGB:
+            colorSpace = VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT;
+            break;
+        case EColorSpace::DolbVision:
+            colorSpace = VK_COLOR_SPACE_DOLBYVISION_EXT;
+            break;
+        default:
+            colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            break;
+    }
     JASSERT(uSupportFormatCount > 0);
-    VkSurfaceFormatKHR surfaceFormat = pFormats[0];
+    VkSurfaceFormatKHR fmt {VK_FORMAT_MAX_ENUM,VK_COLOR_SPACE_MAX_ENUM_KHR};
     for (uint32_t i = 0; i < uSupportFormatCount; ++i)
     {
-        if (VK_FORMAT_A2B10G10R10_UNORM_PACK32 == pFormats[i].format && VK_COLOR_SPACE_SRGB_NONLINEAR_KHR == pFormats[i].colorSpace)
+        if(colorSpace != pFormats[i].colorSpace)
         {
-            surfaceFormat = pFormats[i];
-            break;
+            continue;
         }
-        else if (VK_FORMAT_A2B10G10R10_UNORM_PACK32 == pFormats[i].format && VK_COLOR_SPACE_HDR10_ST2084_EXT == pFormats[i].colorSpace)
+        if(VK_FORMAT_A2B10G10R10_UNORM_PACK32==pFormats[i].format)
         {
-            surfaceFormat = pFormats[i];
+            return pFormats[i];
         }
-        else if (VK_FORMAT_B8G8R8A8_UNORM == pFormats[i].format && VK_COLOR_SPACE_SRGB_NONLINEAR_KHR == pFormats[i].colorSpace)
+        else if(VK_FORMAT_B8G8R8A8_SRGB==pFormats[i].format)
         {
-            surfaceFormat = pFormats[i];
+            fmt = pFormats[i];
+        }
+        else if(VK_FORMAT_B8G8R8A8_UNORM==pFormats[i].format)
+        {
+            if(VK_FORMAT_B8G8R8A8_SRGB!=pFormats[i].format)
+            {
+                fmt = pFormats[i];
+            }
         }
     }
-    return surfaceFormat;
+    JASSERT(fmt.format!=VK_FORMAT_MAX_ENUM);
+    return fmt;
 }
 
 VkPresentModeKHR SwapChainVulkan::_SelectPresentMode(const SwapChainDesc& desc, VkSurfaceKHR surface)

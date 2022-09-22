@@ -16,7 +16,6 @@
 
 namespace joker::rhi
 {
-
 // struct RHIRendererContextDesc;
 // struct RHIRendererContext;
 // struct RHIRendererDesc;
@@ -60,5 +59,9 @@ namespace joker::rhi
 // struct RHIQueryPoolDesc;
 // struct RHIQueryPool;
 // struct RHIQueryDesc;
+
+class Texture;
+
+constexpr n32 kMaxRenderTargetNum = 8;
 
 }

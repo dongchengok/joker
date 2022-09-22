@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JokerVulkan.h"
-#include "JokerDevice.h"
 
 namespace joker::rhi::vulkan
 {
@@ -40,11 +39,17 @@ class JRHI_ALIGN DeviceVulkan final : public Device
         u32                  bHDRSupported            : 1;
         bool                 bValid                   : 1;
     };
+    struct DeviceQueueFamilyInfo
+    {
+        u32          uFamilyFlags;
+        vector<bool> vQueueUsedState;
+    };
     struct DeviceInfo
     {
-        u32                    uUsingGPUIndex;
-        vector<GPUInfo>        vGPUs;
-        VkAllocationCallbacks* pAllocationCallbacks = nullptr;
+        u32                           uUsingGPUIndex;
+        vector<DeviceQueueFamilyInfo> vQueueInfo;
+        vector<GPUInfo>               vGPUs;
+        VkAllocationCallbacks*        pAllocationCallbacks = nullptr;
     };
 
   public:
@@ -59,6 +64,9 @@ class JRHI_ALIGN DeviceVulkan final : public Device
     virtual const string& GetGPUName(n32 idx) const override;
     virtual const string& GetGPUVendor(n32 idx) const override;
     virtual const string& GetGPUModel(n32 idx) const override;
+
+    bool                  AcquireQueue(EQueueType eType, u32& uFamilyIndex, u32& uIndex);
+    void                  ReleaseQueue(EQueueType eType, u32 uFamilyIndex, u32 uIndex);
 
   private:
     void              _CreateInstance();

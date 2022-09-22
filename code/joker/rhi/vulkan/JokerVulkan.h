@@ -41,8 +41,8 @@ extern class DeviceVulkan* g_pRendererVulkan;
 
 }
 
-#define JRHI_VK_INSTANCE (*(VkInstance*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWContext))
-#define JRHI_VK_DEVICE   (*(VkDevice*)(&joker::rhi::vulkan::g_pRendererVulkan->m_pHWDevice))
+#define JRHI_VK_INSTANCE ((VkInstance)joker::rhi::vulkan::g_pRendererVulkan->m_HandleContext)
+#define JRHI_VK_DEVICE   ((VkDevice)joker::rhi::vulkan::g_pRendererVulkan->m_HandleDevice)
 #define JRHI_VK_GPU      (joker::rhi::vulkan::g_pRendererVulkan->m_hVkActiveDevice)
 #define JRHI_VK_ALLOC    (g_pRendererVulkan->m_pVkAllocationCallbacks)
 
