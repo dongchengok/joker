@@ -23,6 +23,8 @@
                 }
             ],
             "console": "externalTerminal",
+            // eastl的可视化文件
+            "visualizerFile": "${workspaceFolder}/natvis/EASTL.natvis",
         }
     ]
 }
