@@ -43,7 +43,9 @@ SwapChainVulkan::SwapChainVulkan(const SwapChainDesc& desc)
             caps.currentTransform != VK_SURFACE_TRANSFORM_HORIZONTAL_MIRROR_ROTATE_270_BIT_KHR);
     VkSurfaceTransformFlagBitsKHR preTransform = (caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : caps.currentTransform;
 
-    JRHI_VK_DESC(VkSwapchainCreateInfoKHR, infoSwapChain, VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR);
+    VkSwapchainCreateInfoKHR infoSwapChain;
+    infoSwapChain.sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    infoSwapChain.pNext                 = nullptr;
     infoSwapChain.flags                 = 0; // 用0就行了，几个flag不需要
     infoSwapChain.surface               = surface;
     infoSwapChain.minImageCount         = m_pDesc->nImageCount;

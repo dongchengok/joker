@@ -158,8 +158,10 @@ struct RenderPassDesc
     struct DepthStencilAttachmentDesc
     {
         Texture*     pDepthStencilTarget = nullptr;
+        bool         bWriteableDepth     = true;
         ELoadAction  eLoadActionDepth    = ELoadAction::NoAction;
         EStoreAction eStoreActionDepth   = EStoreAction::NoAction;
+        bool         bWriteableStencil  = false;
         ELoadAction  eLoadActionStencil  = ELoadAction::NoAction;
         EStoreAction eStoreActionStencil = EStoreAction::NoAction;
         // Texture*                  pResolveTarget      = nullptr; 自己resolve需要VkSubpassDescription2
@@ -242,15 +244,15 @@ union ClearValue {
 struct TextureDesc
 {
     ClearValue          ClearValue;
-    ETextureCreateFlags eFlags     = ETextureCreateFlags::None;
-    n32                 nWidth     = 1;
-    n32                 nHeight    = 1;
-    u16                 uDepth     = 1;
-    u16                 uArraySize = 1;
-    u8                  uNumMips   = 1;
-    u8                  NumSamples = 1; // MSAA多重采样
-    ETextureDimension   eDimension = ETextureDimension::Texture2D;
-    EPixelFormat        eFormat    = EPixelFormat::UNKNOWN;
+    ETextureCreateFlags eFlags      = ETextureCreateFlags::None;
+    n32                 nWidth      = 1;
+    n32                 nHeight     = 1;
+    u16                 uDepth      = 1;
+    u16                 uArraySize  = 1;
+    u8                  uNumMips    = 1;
+    ESampleCount        eNumSamples = ESampleCount::X1; // MSAA多重采样
+    ETextureDimension   eDimension  = ETextureDimension::Texture2D;
+    EPixelFormat        eFormat     = EPixelFormat::UNDEFINED;
 };
 
 class JRHI_ALIGN Texture : public Resource

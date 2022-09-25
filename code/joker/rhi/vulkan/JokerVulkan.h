@@ -37,7 +37,32 @@
 namespace joker::rhi::vulkan
 {
 
-extern class DeviceVulkan* g_pRendererVulkan;
+extern class DeviceVulkan*             g_pRendererVulkan;
+
+constexpr inline VkSampleCountFlagBits ToSampleVK(joker::rhi::ESampleCount n)
+{
+    return (VkSampleCountFlagBits)n;
+}
+
+constexpr inline VkFormat ToFormatVK(EPixelFormat eFormat)
+{
+    return (VkFormat)eFormat;
+}
+
+constexpr inline VkAttachmentLoadOp ToLoadOpVK(ELoadAction eLoad)
+{
+    return (VkAttachmentLoadOp)eLoad;
+}
+
+constexpr inline VkAttachmentStoreOp ToStoreOpVK(EStoreAction eStore)
+{
+    return (VkAttachmentStoreOp)eStore;
+}
+
+constexpr inline VkImageLayout ToDepthStencilImageLayoutVK(bool bDepthWriteable, bool bStencilWriteable)
+{
+    return (bDepthWriteable || bStencilWriteable) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+}
 
 }
 
@@ -46,8 +71,4 @@ extern class DeviceVulkan* g_pRendererVulkan;
 #define JRHI_VK_GPU      (joker::rhi::vulkan::g_pRendererVulkan->m_hVkActiveDevice)
 #define JRHI_VK_ALLOC    (g_pRendererVulkan->m_pVkAllocationCallbacks)
 
-#define JRHI_VK_DESC(type, var, stype)                                                                                                                                             \
-    type var;                                                                                                                                                                      \
-    JCLEAR(var, type);                                                                                                                                                             \
-    var.sType = stype;                                                                                                                                                             \
-    var.pNext = nullptr;
+// constexpr inline VkFormat JRHI_VK_FORMAT()

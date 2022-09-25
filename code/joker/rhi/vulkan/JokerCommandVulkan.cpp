@@ -33,8 +33,11 @@ namespace joker::rhi::vulkan
 
 CommandPoolVulkan::CommandPoolVulkan(const CommandPoolDesc& desc)
 {
-    m_pDesc = JNEW CommandPoolDesc(desc);
-    JRHI_VK_DESC(VkCommandPoolCreateInfo, info, VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+    m_pDesc = JNEW          CommandPoolDesc(desc);
+
+    VkCommandPoolCreateInfo info;
+    info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    info.pNext            = nullptr;
     info.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     info.queueFamilyIndex = ((QueueVulkan*)desc.pQueue)->m_uFamilyIndex;
     JRHI_VK_CHECK(vkCreateCommandPool(JRHI_VK_DEVICE, &info, JRHI_VK_ALLOC, (VkCommandPool*)&m_Handle));
@@ -50,8 +53,10 @@ VkCommandBuffer CommandVulkan::ms_pActiveCommand = nullptr;
 
 CommandVulkan::CommandVulkan(const CommandDesc& desc) : m_pPool((CommandPoolVulkan*)desc.pPool)
 {
-    m_pDesc = JNEW CommandDesc(desc);
-    JRHI_VK_DESC(VkCommandBufferAllocateInfo, info, VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
+    m_pDesc = JNEW              CommandDesc(desc);
+    VkCommandBufferAllocateInfo info;
+    info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.pNext              = nullptr;
     info.commandBufferCount = 1;
     info.commandPool        = (VkCommandPool)m_pPool->m_Handle;
     info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
