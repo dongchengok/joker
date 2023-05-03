@@ -1,6 +1,0 @@
-[x] 格式化时候pch文件位置顺序变了
-[] 关掉异常和RTTI编译(MSVC的CMAKE不干净，现在是临时的)
-[] vkCreateInstance 自定义内存分配
-[] free分debug和release的情况
-[] 把初始化日志打清楚
-[] gpuSettings->m_GPUVendorPreset.m_ePresetLevel = ERHIGPUPresetLevel::None 预设等级看看怎么处理

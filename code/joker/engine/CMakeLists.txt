@@ -1,2 +1,0 @@
-joker_project_engine(JokerEngine)
-target_link_libraries(JokerEngine PUBLIC JokerCore JokerRHI)

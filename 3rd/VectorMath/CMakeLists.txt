@@ -1,1 +1,0 @@
-joker_project_3rd(VectorMath INTERFACE)
