@@ -4,7 +4,7 @@ use std::sync::Arc;
 mod macros;
 
 mod null;
-mod vulkan; 
+mod vulkan;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[repr(i32)]
@@ -13,23 +13,53 @@ pub enum EGraphicAPI {
     Vulkan = 1,
 }
 
-pub fn initialize()->InstanceRef{
-    Arc::new(vulkan::Instance::initialize())
+pub fn initialize(desc: &InstanceDesc) -> InstanceRef {
+    Arc::new(vulkan::InstanceVulkan::new(desc))
 }
 
-pub fn default()->InstanceRef{
-    initialize()
+pub fn default() -> InstanceRef {
+    initialize(&InstanceDesc::default())
+}
+
+pub struct InstanceDesc {
+    pub api : EGraphicAPI,
+    pub app_name: String,
+}
+
+impl Default for InstanceDesc {
+    fn default() -> Self {
+        InstanceDesc {
+            api : EGraphicAPI::Vulkan,
+            app_name: "joker".to_string(),
+        }
+    }
 }
 
 pub trait Instance: Send + Sync {
-    fn initialize()->Self where Self:Sized;
+    fn new(desc: &InstanceDesc) -> Self
+    where
+        Self: Sized;
 
-    fn create_device(&self)->DeviceRef;
+    fn create_device(&self, desc: &DeviceDesc) -> DeviceRef;
 }
 type InstanceRef = Arc<dyn Instance>;
 
+pub struct DeviceDesc {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Default for DeviceDesc {
+    fn default() -> Self {
+        DeviceDesc {
+            width: 1280u32,
+            height: 720u32,
+        }
+    }
+}
+
 pub trait Device: Send + Sync {
-    fn new()->Self where Self:Sized;
+    // fn new()->Self where Self:Sized;
 }
 type DeviceRef = Arc<dyn Device>;
 
