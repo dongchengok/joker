@@ -1,11 +1,13 @@
+#![allow(unused)]
+
 use ash::extensions::{
     ext::DebugUtils,
     khr::{Surface, Swapchain},
 };
 use ash::*;
-use std::ffi::CStr;
 use std::ffi::CString;
 use std::sync::Arc;
+use std::{ffi::CStr, os::raw::c_char};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::{
@@ -42,6 +44,23 @@ impl crate::Instance for InstanceVulkan {
             ..Default::default()
         };
 
+        let layer_names = unsafe {
+            [CStr::from_bytes_with_nul_unchecked(
+                b"VK_LAYER_KHRONOS_validation\0",
+            )]
+        };
+        let layers_names_raw: Vec<*const c_char> = layer_names
+            .iter()
+            .map(|raw_name| raw_name.as_ptr())
+            .collect();
+
+        let mut extension_names = vec![
+            ash::extensions::khr::Surface::name().as_ptr(),
+            ash::extensions::khr::Win32Surface::name().as_ptr(),
+        ]
+        .to_vec();
+        // extension_names.push(DebugUtils::NAME.as_ptr());
+
         let create_flags = if cfg!(any(target_os = "macos", target_os = "ios")) {
             vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
         } else {
@@ -50,6 +69,8 @@ impl crate::Instance for InstanceVulkan {
 
         let create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
+            .enabled_layer_names(&layers_names_raw)
+            .enabled_extension_names(&extension_names)
             .flags(create_flags)
             .build();
 
@@ -63,7 +84,7 @@ impl crate::Instance for InstanceVulkan {
     }
 
     fn create_device(&self, desc: &DeviceDesc) -> crate::DeviceRef {
-        let event_loop = EventLoop::new();
+        let mut event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_title("Ash - Example")
             .with_inner_size(winit::dpi::LogicalSize::new(
@@ -150,10 +171,31 @@ impl crate::Instance for InstanceVulkan {
                 .unwrap()
         };
 
-        // let device = DeviceVulkan {
-        //     device_physical: vk::PhysicalDevice::default(),
-        //     device_logic: vk::Device::null(),
-        // };
+        let f = ||{};
+
+        event_loop
+        .run_return(|event, _, control_flow| {
+            *control_flow = ControlFlow::Poll;
+            match event {
+                Event::WindowEvent {
+                    event:
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        },
+                    ..
+                } => *control_flow = ControlFlow::Exit,
+                Event::MainEventsCleared => f(),
+                _ => (),
+            }
+        });
+
         Arc::new(DeviceVulkan {
             device_physical: pdevice,
             device_logic: device,

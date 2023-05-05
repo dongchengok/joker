@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 #[derive(Clone, Copy)]
 pub struct Null;
 pub struct NullContext;
