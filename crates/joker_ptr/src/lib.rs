@@ -28,3 +28,17 @@ pub struct Ptr<'a, A: IsAligned = Aligned>(NonNull<u8>, PhantomData<(&'a u8, A)>
 pub struct MutPtr<'a, A: IsAligned = Aligned>(NonNull<u8>, PhantomData<(&'a mut u8, A)>);
 
 pub struct OwnPtr<'a, A: IsAligned = Aligned>(NonNull<u8>, PhantomData<(&'a mut u8, A)>);
+
+macro_rules! impl_ptr {
+    ($ptr:ident) => {
+        impl<'a> $ptr<'a, Aligned> {
+            pub fn to_unaligned(self) -> $ptr<'a, Unaligned> {
+                $ptr(self.0, PhantomData)
+            }
+        }
+    };
+}
+
+impl_ptr!(Ptr);
+impl_ptr!(MutPtr);
+impl_ptr!(OwnPtr);
