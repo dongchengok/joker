@@ -1,6 +1,8 @@
 use core::fmt::{self, Formatter, Pointer};
+use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
+use std::num::NonZeroUsize;
 use std::ptr::NonNull;
 
 #[derive(Clone, Copy)]
@@ -178,6 +180,7 @@ impl<'a, A: IsAligned> OwningPtr<'a, A> {
     }
 
     #[inline]
+    #[allow(clippy::wrong_self_convention)]
     pub fn as_ptr(&self) -> *mut u8 {
         self.0.as_ptr()
     }
@@ -189,6 +192,92 @@ impl<'a, A: IsAligned> OwningPtr<'a, A> {
 
     pub fn as_mut(&mut self) -> PtrMut<'_, A> {
         unsafe { PtrMut::new(self.0) }
+    }
+}
+
+impl<'a> OwningPtr<'a, Unaligned> {
+    //我自己加了个inline
+    #[inline]
+    pub unsafe fn read_unaligned<T>(self) -> T {
+        self.as_ptr().cast::<T>().read_unaligned()
+    }
+}
+
+pub struct ThinSlicePtr<'a, T> {
+    ptr: NonNull<T>,
+    #[cfg(debug_assertions)]
+    len: usize,
+    _marker: PhantomData<&'a [T]>,
+}
+
+impl<'a, T> ThinSlicePtr<'a, T> {
+    #[inline]
+    pub unsafe fn get(self, index: usize) -> &'a T {
+        #[cfg(debug_assertions)]
+        debug_assert!(index < self.len);
+        &*self.ptr.as_ptr().add(index)
+    }
+}
+
+impl<'a, T> Clone for ThinSlicePtr<'a, T> {
+    fn clone(&self) -> Self {
+        //因为有copy，所以这个才合法
+        *self
+    }
+}
+
+impl<'a, T> Copy for ThinSlicePtr<'a, T> {}
+
+impl<'a, T> From<&'a [T]> for ThinSlicePtr<'a, T> {
+    #[inline]
+    fn from(slice: &'a [T]) -> Self {
+        let ptr = slice.as_ptr() as *mut T;
+        Self {
+            ptr: unsafe { NonNull::new_unchecked(ptr.debug_ensure_aligned()) },
+            #[cfg(debug_assertions)]
+            len: slice.len(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+pub fn dangling_with_align(align: NonZeroUsize) -> NonNull<u8> {
+    #[cfg(debug_assertions)]
+    debug_assert!(align.is_power_of_two(), "Alignment must be power of two.");
+    unsafe { NonNull::new_unchecked(align.get() as *mut u8) }
+}
+
+mod private {
+    use core::cell::UnsafeCell;
+
+    pub trait SealedUnsafeCell {}
+    //这几行代码没看懂还
+    impl<'a, T> SealedUnsafeCell for &'a UnsafeCell<T> {}
+}
+
+//这个肯定是不可继承的
+pub trait UnsafeCellDeref<'a, T>: private::SealedUnsafeCell {
+    unsafe fn deref_mut(self) -> &'a mut T;
+    unsafe fn deref(self) -> &'a T;
+    unsafe fn read(self) -> T
+    where
+        T: Copy;
+}
+
+//UnsafeCell看起来没有copy，所以自己可能会被消耗掉，不允许用了
+impl<'a, T> UnsafeCellDeref<'a,T> for &'a UnsafeCell<T>{
+    unsafe fn deref_mut(self) -> &'a mut T {
+        &mut *self.get()
+    }
+
+    unsafe fn deref(self) -> &'a T {
+        &*self.get()
+    }
+
+    unsafe fn read(self) -> T
+    where
+        T: Copy {
+        self.get().read()
     }
 }
 
