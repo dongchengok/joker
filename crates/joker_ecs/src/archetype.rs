@@ -1,3 +1,4 @@
+#![allow(unused)]
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(transparent)]

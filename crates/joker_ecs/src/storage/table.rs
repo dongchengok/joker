@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct TableId(u32);

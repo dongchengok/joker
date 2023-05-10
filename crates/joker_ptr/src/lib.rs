@@ -125,14 +125,12 @@ impl<'a, A: IsAligned> PtrMut<'a, A> {
         &mut *self.as_ptr().cast::<T>().debug_ensure_aligned()
     }
 
-    //这块的生命周期没看懂，需要测试一下，as_ptr之后看起来指针就已经非法了
     #[inline]
     #[allow(clippy::wrong_self_convention)]
     pub fn as_ptr(&self) -> *mut u8 {
         self.0.as_ptr()
     }
 
-    //大概明白了，重点是NonNull有Copy的trait，所以复制之后依然合法
     #[inline]
     pub fn reborrow(&mut self) -> PtrMut<'_, A> {
         unsafe { PtrMut::new(self.0) }
@@ -151,7 +149,6 @@ impl<'a, T> From<&'a mut T> for PtrMut<'a> {
     }
 }
 
-//TODO 这块还没看懂
 impl<'a> OwningPtr<'a> {
     #[inline]
     pub fn make<T, F: FnOnce(OwningPtr<'_>) -> R, R>(val: T, f: F) -> R {
@@ -309,5 +306,39 @@ impl<T: Sized> DebugEnsureAligned for *mut T {
     #[inline(always)]
     fn debug_ensure_aligned(self) -> Self {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests{
+    use std::ptr::NonNull;
+
+    use crate::Ptr;
+
+
+    #[test]
+    fn test_ptr(){
+        let data = std::ptr::null_mut() as *mut u8;
+        let mut ptr:Ptr = unsafe { Ptr::new({ NonNull::new_unchecked(data) }) };
+        let mut ptr_m1 = unsafe{ ptr.assert_unique() };
+        let mut ptr_m2 = unsafe{ ptr.assert_unique() };
+        {
+            let mut ptra:Ptr = unsafe { Ptr::new({ NonNull::new_unchecked(data) }) };
+            {
+                let mut ptrb:Ptr = unsafe { Ptr::new({ NonNull::new_unchecked(data) }) };
+            }
+            ptr = ptra;
+        }
+    }
+
+    #[test]
+    fn test_ptr_mut(){
+        let a = 1i32;
+        let mut ptr_out = Ptr::from(&a);
+        {
+            let b = 1i32;
+            let ptr = Ptr::from(&b);
+            ptr_out = ptr;
+        }
     }
 }
