@@ -71,8 +71,8 @@ impl BundleComponentStatus for SpawnBundleStatus{
     }
 }
 
-// /// 这个目前还不知道是干啥的
 // #[derive(Default)]
 // pub struct Edge{
-//     add_bundle: SparesArray<
+//     add_bundle: SparesArray<BundleId,AddBundle>,
+//     remove_bundle: SparesArray<BundleId, Option<ArchetypeId>>,
 // }

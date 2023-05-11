@@ -67,6 +67,8 @@ impl BlobVec {
         drop: Option<unsafe fn(joker::ptr::OwningPtr<'_>)>,
         capacity: usize,
     ) -> BlobVec {
+        //不能允许大小是不对齐的
+        debug_assert!(item_layout.size()%item_layout.align()==0);
         let align = NonZeroUsize::new(item_layout.align()).expect("align must > 0");
         let data = joker::ptr::dangling_with_align(align);
         if item_layout.size() == 0 {
@@ -414,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn test_aligned_zst(){
+    fn test_aligned_zst() {
         // #[derive(Component)]
         // #[repr(align(32))]
         // struct Zst;
@@ -446,5 +448,26 @@ mod tests {
         let new_layout = array_layout(&layout, 200).unwrap();
         assert_eq!(new_layout.size(), 200 * 8);
         assert_eq!(new_layout.align(), 8);
+    }
+
+    #[repr(align(64))]
+    struct Obj64{
+        a:i8,
+    }
+
+    #[test]
+    fn test_layout_size() {
+        struct Obj {
+            a: i16,
+            b: i8,
+        }
+        let layout = Layout::new::<Obj>();
+        assert_eq!(layout.size(), 4);
+        assert_eq!(layout.align(), 2);
+
+
+        let layout = Layout::new::<Obj64>();
+        assert_eq!(layout.size(),64);
+        assert_eq!(layout.align(),64);
     }
 }

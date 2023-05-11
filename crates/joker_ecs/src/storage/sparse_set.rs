@@ -5,15 +5,22 @@ use std::marker::PhantomData;
 
 type EntityIndex = u32;
 
-pub trait SparseSetIndex: Clone + PartialEq + Eq + Hash {
-    fn sparse_set_index(&self) -> usize;
-    fn get_sparse_set_index(value: usize) -> Self;
-}
-
 #[derive(Debug)]
 pub struct SparseArray<I, V = I> {
     values: Vec<Option<V>>,
     marker: PhantomData<I>,
+}
+
+#[derive(Debug)]
+pub struct ImmutableSparseArray<I, V = I> {
+    values: Box<[Option<V>]>,
+    marker: PhantomData<I>,
+}
+
+impl<I: SparseSetIndex, V> Default for SparseArray<I, V> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<I, V> SparseArray<I, V> {
@@ -26,16 +33,9 @@ impl<I, V> SparseArray<I, V> {
     }
 }
 
-impl<I: SparseSetIndex, V> Default for SparseArray<I, V> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug)]
-pub struct ImmutableSparseArray<I, V = I> {
-    values: Box<[Option<V>]>,
-    marker: PhantomData<I>,
+pub trait SparseSetIndex: Clone + PartialEq + Eq + Hash {
+    fn sparse_set_index(&self) -> usize;
+    fn get_sparse_set_index(value: usize) -> Self;
 }
 
 macro_rules! impl_sparse_array {

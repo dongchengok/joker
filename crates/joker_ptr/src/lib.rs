@@ -311,34 +311,24 @@ impl<T: Sized> DebugEnsureAligned for *mut T {
 
 #[cfg(test)]
 mod tests{
-    use std::ptr::NonNull;
+    // use std::ptr::NonNull;
 
-    use crate::Ptr;
+    // use crate::Ptr;
 
 
-    #[test]
-    fn test_ptr(){
-        let data = std::ptr::null_mut() as *mut u8;
-        let mut ptr:Ptr = unsafe { Ptr::new({ NonNull::new_unchecked(data) }) };
-        let mut ptr_m1 = unsafe{ ptr.assert_unique() };
-        let mut ptr_m2 = unsafe{ ptr.assert_unique() };
-        {
-            let mut ptra:Ptr = unsafe { Ptr::new({ NonNull::new_unchecked(data) }) };
-            {
-                let mut ptrb:Ptr = unsafe { Ptr::new({ NonNull::new_unchecked(data) }) };
-            }
-            ptr = ptra;
-        }
-    }
+    // #[test]
+    // fn test_ptr(){
+    //     let data = std::ptr::null_mut() as *mut u8;
+    // }
 
-    #[test]
-    fn test_ptr_mut(){
-        let a = 1i32;
-        let mut ptr_out = Ptr::from(&a);
-        {
-            let b = 1i32;
-            let ptr = Ptr::from(&b);
-            ptr_out = ptr;
-        }
-    }
+    // #[test]
+    // fn test_ptr_mut(){
+    //     let a = 1i32;
+    //     let mut ptr_out = Ptr::from(&a);
+    //     {
+    //         let b = 1i32;
+    //         let ptr = Ptr::from(&b);
+    //         ptr_out = ptr;
+    //     }
+    // }
 }

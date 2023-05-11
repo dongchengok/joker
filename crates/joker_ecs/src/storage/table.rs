@@ -28,6 +28,8 @@ impl TableId {
 pub struct TableRow(u32);
 
 impl TableRow {
+    pub const INVALID: TableRow = TableRow(u32::MAX);
+
     #[inline]
     pub fn new(index: usize) -> Self {
         Self(index as u32)
