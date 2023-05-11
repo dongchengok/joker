@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use joker_rhi::Device;
 use std::default;
 

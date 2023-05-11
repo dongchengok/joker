@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 joker_ptr = { path="../joker_ptr" }
+joker_foundation = { path="../joker_foundation" }
 serde = { version = "1", features = ["derive"] }
