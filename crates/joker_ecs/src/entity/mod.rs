@@ -155,9 +155,9 @@ impl Entities {
         }
     }
 
-    pub fn reserve_entities(&self, count:u32)->ReserveEntitiesIterator{
-        let range_end = self.free_cursor.fetch_sub(IdCursor::try_from(count).unwrap(), Ordering::Relaxed)
-    }
+    // pub fn reserve_entities(&self, count:u32)->ReserveEntitiesIterator{
+    //     let range_end = self.free_cursor.fetch_sub(IdCursor::try_from(count).unwrap(), Ordering::Relaxed)
+    // }
 }
 
 #[derive(Clone, Copy, Debug)]
