@@ -3,6 +3,11 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 
+use crate::component::ComponentId;
+use crate::entity::Entity;
+
+use super::table::Column;
+
 type EntityIndex = u32;
 
 #[derive(Debug)]
@@ -15,6 +20,38 @@ pub struct SparseArray<I, V = I> {
 pub struct ImmutableSparseArray<I, V = I> {
     values: Box<[Option<V>]>,
     marker: PhantomData<I>,
+}
+
+#[derive(Debug)]
+pub struct SparseSet<I, V: 'static> {
+    dense: Vec<V>,
+    indices: Vec<I>,
+    sparse: SparseArray<I, usize>,
+}
+
+#[derive(Debug)]
+pub struct ImmutableSparseSet<I,V:'static>{
+    dense:Box<V>,
+    indices:Box<[I]>,
+    sparse:ImmutableSparseArray<I,usize>,
+}
+
+pub struct ComponentSparseSet{
+    dense:Column,
+    #[cfg(not(debug_assertions))]
+    entities:Vec<EntityIndex>,
+    #[cfg(debug_assertions)]
+    entities:Vec<Entity>,
+    sparse:SparseArray<EntityIndex,u32>,
+}
+
+pub struct SparseSets {
+    sets: SparseSet<ComponentId, ComponentSparseSet>,
+}
+
+pub trait SparseSetIndex: Clone + PartialEq + Eq + Hash {
+    fn sparse_set_index(&self) -> usize;
+    fn get_sparse_set_index(value: usize) -> Self;
 }
 
 impl<I: SparseSetIndex, V> Default for SparseArray<I, V> {
@@ -31,11 +68,6 @@ impl<I, V> SparseArray<I, V> {
             marker: PhantomData,
         }
     }
-}
-
-pub trait SparseSetIndex: Clone + PartialEq + Eq + Hash {
-    fn sparse_set_index(&self) -> usize;
-    fn get_sparse_set_index(value: usize) -> Self;
 }
 
 macro_rules! impl_sparse_array {

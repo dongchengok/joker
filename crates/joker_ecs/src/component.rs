@@ -1,9 +1,14 @@
 #![allow(unused)]
 
-use std::{alloc::Layout, any::{TypeId, Any}, borrow::{Cow, Borrow}, mem::needs_drop};
+use std::{
+    alloc::Layout,
+    any::{Any, TypeId},
+    borrow::{Borrow, Cow},
+    mem::needs_drop,
+};
 
-use joker_ptr::OwningPtr;
 use joker_foundation::HashMap;
+use joker_ptr::OwningPtr;
 
 use crate::{resource::Resource, storage::sparse_set::SparseSetIndex};
 
@@ -50,13 +55,18 @@ pub struct ComponentInfo {
     descriptor: ComponentDescriptor,
 }
 
-type TypeIdMap<V> = HashMap<TypeId,V>;
+type TypeIdMap<V> = HashMap<TypeId, V>;
 
-#[derive(Debug,Default)]
-pub struct Components{
-    components:Vec<ComponentInfo>,
-    indices:TypeIdMap<usize>,
-    resource_indices:TypeIdMap<usize>,
+#[derive(Debug, Default)]
+pub struct Components {
+    components: Vec<ComponentInfo>,
+    indices: TypeIdMap<usize>,
+    resource_indices: TypeIdMap<usize>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Tick {
+    tick: u32,
 }
 
 impl ComponentStorage for TableStorage {
@@ -188,24 +198,24 @@ impl ComponentDescriptor {
         }
     }
 
-    pub fn new_no_send<T:Any>(storage_type: StorageType)->Self{
-        Self{
-            name:Cow::Borrowed(std::any::type_name::<T>()),
-            storage_type:storage_type,
-            is_send_and_sync:false,
-            type_id:Some(TypeId::of::<T>()),
-            layout:Layout::new::<T>(),
-            drop:needs_drop::<T>().then_some(Self::drop_ptr::<T> as _)
+    pub fn new_no_send<T: Any>(storage_type: StorageType) -> Self {
+        Self {
+            name: Cow::Borrowed(std::any::type_name::<T>()),
+            storage_type: storage_type,
+            is_send_and_sync: false,
+            type_id: Some(TypeId::of::<T>()),
+            layout: Layout::new::<T>(),
+            drop: needs_drop::<T>().then_some(Self::drop_ptr::<T> as _),
         }
     }
 
     #[inline]
-    pub fn storage_type(&self)->StorageType{
+    pub fn storage_type(&self) -> StorageType {
         self.storage_type
     }
 
     #[inline]
-    pub fn name(&self)->&str{
+    pub fn name(&self) -> &str {
         self.name.as_ref()
     }
 }

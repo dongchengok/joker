@@ -1,8 +1,22 @@
 #![allow(unused)]
 
+use std::cell::UnsafeCell;
+use crate::component::Tick;
+use super::blob_vec::BlobVec;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct TableId(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct TableRow(u32);
+
+pub struct Column {
+    data: BlobVec,
+    added_ticks: Vec<UnsafeCell<Tick>>,
+    changed_ticks: Vec<UnsafeCell<Tick>>,
+}
 
 impl TableId {
     pub const INVALID: TableId = TableId(u32::MAX);
@@ -22,10 +36,6 @@ impl TableId {
         TableId(0)
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct TableRow(u32);
 
 impl TableRow {
     pub const INVALID: TableRow = TableRow(u32::MAX);
