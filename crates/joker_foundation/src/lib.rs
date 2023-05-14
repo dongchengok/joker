@@ -2,6 +2,13 @@
 
 use std::mem::ManuallyDrop;
 
+use ahash::RandomState;
+
+pub type HashMap<K, V> = hashbrown::HashMap<K, V, RandomState>;
+pub type HashSet<T> = hashbrown::HashSet<T, RandomState>;
+
+pub type Entry<'a, K, V> = hashbrown::hash_map::Entry<'a, K, V, RandomState>;
+
 pub struct OnDrop<F: FnOnce()> {
     callback: ManuallyDrop<F>,
 }
@@ -16,31 +23,29 @@ impl<F: FnOnce()> OnDrop<F> {
 
 impl<F: FnOnce()> Drop for OnDrop<F> {
     fn drop(&mut self) {
-        let callback = unsafe {
-            ManuallyDrop::take(&mut self.callback)
-        };
+        let callback = unsafe { ManuallyDrop::take(&mut self.callback) };
         callback();
     }
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use std::mem::ManuallyDrop;
 
     #[derive(Debug)]
-    struct Object{
-        id:i32,
+    struct Object {
+        id: i32,
     }
 
-    impl Drop for Object{
+    impl Drop for Object {
         fn drop(&mut self) {
-            println!("drop:{}",self.id);
+            println!("drop:{}", self.id);
         }
     }
 
     #[test]
-    fn test_drop_into(){
-        let obj = Object{id:1i32};
+    fn test_drop_into() {
+        let obj = Object { id: 1i32 };
         //转移所有权
         let obj_drop = ManuallyDrop::new(obj);
         //obj就不能访问了
@@ -53,14 +58,14 @@ mod tests{
     }
 
     #[test]
-    fn test_drop_take(){
-        let obj = Object{id:1i32};
+    fn test_drop_take() {
+        let obj = Object { id: 1i32 };
         //转移所有权
         let mut obj_drop = ManuallyDrop::new(obj);
         //obj就不能访问了
         // println!("{:?}",&obj);
         //再把obj拿回来,obj_drop还是合法的
-        let obj_into = unsafe{ ManuallyDrop::take(&mut obj_drop) };
+        let obj_into = unsafe { ManuallyDrop::take(&mut obj_drop) };
         //没有拿走所有权
         let id = obj_drop.id;
         //obj_into会自动调用析构
