@@ -10,10 +10,19 @@ use std::{
 use joker_foundation::HashMap;
 use joker_ptr::OwningPtr;
 
-use crate::{resource::Resource, storage::sparse_set::SparseSetIndex};
+use crate::{
+    resource::Resource,
+    storage::{sparse_set::SparseSetIndex, Storages},
+};
 
 pub trait Component: Send + Sync + 'static {
     type Storage: ComponentStorage;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ComponentTick {
+    pub added: Tick,
+    pub changed: Tick,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -220,10 +229,36 @@ impl ComponentDescriptor {
     }
 }
 
-// impl Components{
-//     #[inline]
-//     pub fn init_component<T:Component>(&mut self, storage:&mut Storages)
-// }
+impl Components {
+    // #[inline]
+    // pub fn init_component<T:Component>(&mut self, storages:&mut Storages)->ComponentId{
+    //     let type_id = TypeId::of::<T>();
+    //     let Components{
+    //         indices,
+    //         components,
+    //         ..
+    //     } = self;
+    //     let index = indices.entry(type_id).or_insert_with(||{
+    //         Components::init_component_inner(components,storages,ComponentDescriptor::new::<T>())
+    //     });
+    //     ComponentId(*index)
+    // }
+
+    // pub fn init_component_with_descriptor(&mut self, storages:&mut Storages, descriptor:ComponentDescriptor)->ComponentId{
+    //     let index = Components::init_component_inner(&mut self.components, storages, descriptor)
+    // }
+
+    // #[inline]
+    // pub fn init_component_inner(components:&mut Vec<ComponentInfo>, storages:&mut Storages, descriptor:ComponentDescriptor)->usize{
+    //     let index = components.len();
+    //     let info = ComponentInfo::new(ComponentId(index),descriptor);
+    //     if info.descriptor.storage_type==StorageType::SparseSet{
+    //         storages.sparse_sets.get_or_insert(&info);
+    //     }
+    //     components.push(info);
+    //     index
+    // }
+}
 
 #[cfg(test)]
 mod tests {

@@ -12,6 +12,12 @@ pub struct EntityMap {
     map: HashMap<Entity, Entity>,
 }
 
+pub struct EntityMapper<'m> {
+    map: &'m mut EntityMap,
+    dead_start: Entity,
+    generation: u32,
+}
+
 impl EntityMap {
     pub fn insert(&mut self, from: Entity, to: Entity) -> Option<Entity> {
         self.map.insert(from, to)
@@ -48,10 +54,12 @@ impl EntityMap {
     pub fn iter(&self) -> impl Iterator<Item = (Entity, Entity)> + '_ {
         self.map.iter().map(|(from, to)| (*from, *to))
     }
+
+    // pub fn world_scope<R>(&mut self, world:&mut World, f:impl FnOnce(&mut World, &mut EntityMapper)->R)->R{
+    //     let mut mapper = EntityMapper::new(self,world);
+    //     let result = f(world,&mut mapper);
+    //     mapper.finish(world);
+    //     result
+    // }
 }
 
-pub struct EntityMapper<'m> {
-    map: &'m mut EntityMap,
-    dead_start: Entity,
-    generation: u32,
-}
