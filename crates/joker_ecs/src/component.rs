@@ -4,6 +4,8 @@ use std::{
     alloc::Layout,
     any::{Any, TypeId},
     borrow::{Borrow, Cow},
+    cell::UnsafeCell,
+    char::MAX,
     mem::needs_drop,
 };
 
@@ -11,6 +13,7 @@ use joker_foundation::HashMap;
 use joker_ptr::OwningPtr;
 
 use crate::{
+    change_detection::MAX_CHANGE_AGE,
     resource::Resource,
     storage::{sparse_set::SparseSetIndex, Storages},
 };
@@ -76,6 +79,12 @@ pub struct Components {
 #[derive(Clone, Copy, Debug)]
 pub struct Tick {
     tick: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TickCells<'a> {
+    pub added: &'a UnsafeCell<Tick>,
+    pub changed: &'a UnsafeCell<Tick>,
 }
 
 impl ComponentStorage for TableStorage {
@@ -229,6 +238,49 @@ impl ComponentDescriptor {
     }
 }
 
+impl Tick {
+    pub const MAX: Self = Self::new(MAX_CHANGE_AGE);
+
+    #[inline]
+    pub const fn new(tick: u32) -> Self {
+        Self { tick }
+    }
+
+    #[inline]
+    pub const fn get(self) -> u32 {
+        self.tick
+    }
+
+    #[inline]
+    pub fn set(&mut self, tick: u32) {
+        self.tick = tick
+    }
+
+    #[inline]
+    pub fn is_newer_than(self, last_run: Tick, this_run: Tick) -> bool {
+        let ticks_since_insert = this_run.relative_to(self).tick.min(MAX_CHANGE_AGE);
+        let ticks_since_system = this_run.relative_to(last_run).tick.min(MAX_CHANGE_AGE);
+        ticks_since_system > ticks_since_insert
+    }
+
+    #[inline]
+    pub fn relative_to(self, other: Self) -> Self {
+        let tick = self.tick.wrapping_sub(other.tick);
+        Self { tick }
+    }
+
+    #[inline]
+    pub fn check_tick(&mut self, tick: Tick) -> bool {
+        let age = tick.relative_to(*self);
+        if age.get() > Self::MAX.get() {
+            *self = tick.relative_to(Self::MAX);
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl Components {
     // #[inline]
     // pub fn init_component<T:Component>(&mut self, storages:&mut Storages)->ComponentId{
@@ -259,6 +311,17 @@ impl Components {
     //     index
     // }
 }
+
+// impl Tick{
+//     pub const MAX:Self = Self::new(MAX_CHANGE_AGE);
+// }
+
+// impl ComponentTicks{
+//     #[inline]
+//     pub fn is_added(&self, last_run:Tick, this_run:Tick)->bool{
+//         self.added.
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

@@ -5,3 +5,4 @@ mod component;
 mod resource;
 mod world;
 mod bundle;
+mod change_detection;
