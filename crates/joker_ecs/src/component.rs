@@ -14,7 +14,7 @@ use joker_ptr::OwningPtr;
 
 use crate::{
     change_detection::MAX_CHANGE_AGE,
-    resource::Resource,
+    system::system_param::Resource,
     storage::{sparse_set::SparseSetIndex, Storages},
 };
 

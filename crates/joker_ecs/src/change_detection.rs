@@ -1,9 +1,12 @@
 #![allow(unused)]
 
 use joker_ptr::UnsafeCellDeref;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
-use crate::component::{Tick, TickCells};
+use crate::{
+    component::{Tick, TickCells},
+    system::system_param::Resource,
+};
 
 // 这里还没搞明白为什么，tick的检查必须在system没有执行的时候做，所以如果需要检查N次，World就tick了N-1次
 // (518,400,000 = 1000 ticks per frame * 144 frames per second * 3600 seconds per hour)
@@ -26,6 +29,11 @@ pub struct TicksMut<'a> {
     pub this_run: Tick,
 }
 
+pub struct Mut<'a, T: ?Sized> {
+    pub value: &'a mut T,
+    pub ticks: TicksMut<'a>,
+}
+
 pub struct NonSendMut<'a, T: ?Sized + 'static> {
     pub value: &'a mut T,
     pub ticks: TicksMut<'a>,
@@ -35,6 +43,16 @@ pub trait DetectChanges {
     fn is_added(&self) -> bool;
     fn is_changed(&self) -> bool;
     fn last_changed(&self) -> Tick;
+}
+
+pub struct Res<'a, T: ?Sized + Resource> {
+    pub value: &'a T,
+    pub ticks: Ticks<'a>,
+}
+
+pub struct ResMut<'a, T: ?Sized + Resource> {
+    pub value: &'a mut T,
+    pub ticks: TicksMut<'a>,
 }
 
 pub trait DetectChangesMut: DetectChanges {
@@ -79,7 +97,40 @@ impl<'a> TicksMut<'a> {
     }
 }
 
-macro_rules! change_detection {
+impl<'a> From<TicksMut<'a>> for Ticks<'a> {
+    fn from(ticks: TicksMut<'a>) -> Self {
+        Ticks {
+            added: ticks.added,
+            changed: ticks.changed,
+            last_run: ticks.last_run,
+            this_run: ticks.this_run,
+        }
+    }
+}
+
+impl<'w, T: Resource> Res<'w, T> {
+    pub fn clone(this: &Self) -> Self {
+        Self {
+            value: this.value,
+            ticks: this.ticks.clone(),
+        }
+    }
+
+    pub fn into_inner(self) -> &'w T {
+        self.value
+    }
+}
+
+impl<'w, T: Resource> From<ResMut<'w, T>> for Res<'w, T> {
+    fn from(res: ResMut<'w, T>) -> Self {
+        Self {
+            value: res.value,
+            ticks: res.ticks.into(),
+        }
+    }
+}
+
+macro_rules! change_detection_impl {
     ($name:ident<$( $generics:tt),+>,$target:ty,$($traits:ident)?) => {
         impl<$($generics),*:?Sized $(+$traits)?> DetectChanges for $name<$($generics),*>{
             #[inline]
@@ -116,4 +167,86 @@ macro_rules! change_detection {
     };
 }
 
-change_detection!(NonSendMut<'a, T>, T,);
+macro_rules! change_detection_mut_impl {
+    ($name:ident < $($generics:tt),+>, $target:ty, $($traits:ident)?) => {
+        impl<$($generics),*:?Sized  $(+ $traits)?> DetectChangesMut for $name<$($generics),*>{
+            type Inner = $target;
+
+            #[inline]
+            fn set_changed(&mut self){
+                *self.ticks.changed = self.ticks.this_run
+            }
+
+            #[inline]
+            fn set_last_changed(&mut self, last_changed: Tick){
+                *self.ticks.changed = last_changed
+            }
+
+            #[inline]
+            fn bypass_change_detection(&mut self)->&mut Self::Inner{
+                self.value
+            }
+        }
+
+        impl<$($generics),* : ?Sized $(+ $traits)?> DerefMut for $name<$($generics),*>{
+            #[inline]
+            fn deref_mut(&mut self)-> &mut Self::Target{
+                self.set_changed();
+                self.value
+            }
+        }
+
+        impl<$($generics),* $(: $traits)?> AsMut<$target> for $name<$($generics),*>{
+            #[inline]
+            fn as_mut(&mut self)->&mut $target{
+                self.deref_mut()
+            }
+        }
+    };
+}
+
+macro_rules! impl_method {
+    ($name:ident < $( $generics:tt ),+>, $target:ty, $($traits:ident)?) => {
+        #[inline]
+        pub fn into_inner(mut self)->&'a mut &target{
+            self.set_changed()
+            self.value
+        }
+
+        pub fn reborrow(&mut self) -> Mut<'_,$target>{
+            Mut{
+                value: self.value,
+                ticks: TicksMut{
+                    added: self.ticks.added,
+                    changed: self.ticks.changed,
+                    last_run: self.ticks.last_run,
+                    this_run: self.ticks.this_run
+                }
+            }
+        }
+
+        pub fn map_unchanged<U:?Sized>(self, f:impl FnOnce(&mut $target)->&mut U)->Mut<'a,U>{
+            Mut{
+                value:f(self.value),
+                ticks:self.ticks,
+            }
+        }
+    };
+}
+
+macro_rules! impl_debug {
+    ($name:ident < $( $generics:tt ),+> $($traits:ident)?) => {
+        impl<$($generics),* : ?Sized $(+$traits)?> std::fmt::Debug for $name<$($generics),*>
+            where T : std::fmt::Debug
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result{
+                f.debug_tuple(stringify!($name))
+                    .field(&self.value)
+                    .finish()
+            }
+        }
+    };
+}
+
+change_detection_impl!(NonSendMut<'a, T>, T,);
+change_detection_mut_impl!(NonSendMut<'a, T>, T,);
