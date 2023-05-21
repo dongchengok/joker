@@ -1,6 +1,6 @@
 #![allow(unused)]
 // use crete::entity::Entity;
-use crate::entity::Entity;
+use crate::{entity::Entity, world::World};
 use joker_foundation::{Entry, HashMap};
 
 pub trait MapEntities {
@@ -15,7 +15,7 @@ pub struct EntityMap {
 pub struct EntityMapper<'m> {
     map: &'m mut EntityMap,
     dead_start: Entity,
-    generation: u32,
+    generations: u32,
 }
 
 impl EntityMap {
@@ -63,3 +63,36 @@ impl EntityMap {
     // }
 }
 
+impl<'m> EntityMapper<'m> {
+    pub fn get_or_reserve(&mut self, entity: Entity) -> Entity {
+        if let Some(mapped) = self.map.get(entity) {
+            return mapped;
+        }
+
+        todo!("没看懂这块！");
+        let new = Entity {
+            generation: self.dead_start.generation + self.generations,
+            index: self.dead_start.index,
+        };
+        self.generations += 1;
+
+        self.map.insert(entity, new);
+        new
+    }
+
+    pub fn get_map(&'m self) -> &'m EntityMap {
+        self.map
+    }
+
+    pub fn get_map_mut(&'m mut self) -> &'m mut EntityMap {
+        self.map
+    }
+
+    // fn new(map: &'m mut EntityMap, world: &*mut World) -> Self {
+    //     Self {
+    //         map: map,
+    //         dead_start: unsafe { world.entities_mut().alloc },
+    //         generations: 0,
+    //     }
+    // }
+}
