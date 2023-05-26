@@ -1,7 +1,10 @@
 #![allow(unused)]
 
 use joker_ptr::UnsafeCellDeref;
-use std::ops::{Deref, DerefMut};
+use std::{
+    array::IntoIter,
+    ops::{Deref, DerefMut},
+};
 
 use crate::{
     component::{Tick, TickCells},
@@ -32,6 +35,11 @@ pub struct TicksMut<'a> {
 pub struct Mut<'a, T: ?Sized> {
     pub value: &'a mut T,
     pub ticks: TicksMut<'a>,
+}
+
+pub struct Ref<'a, T: ?Sized> {
+    pub value: &'a mut T,
+    pub ticks: Ticks<'a>,
 }
 
 pub struct NonSendMut<'a, T: ?Sized + 'static> {
@@ -130,6 +138,70 @@ impl<'w, T: Resource> From<ResMut<'w, T>> for Res<'w, T> {
     }
 }
 
+impl<'w, 'a, T: Resource> IntoIterator for &'a Res<'w, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource> IntoIterator for &'a ResMut<'w, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource> IntoIterator for &'a mut ResMut<'w, T>
+where
+    &'a mut T: IntoIterator,
+{
+    type Item = <&'a mut T as IntoIterator>::Item;
+    type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.set_changed();
+        self.value.into_iter()
+    }
+}
+
+impl<'a, T: 'static> From<NonSendMut<'a, T>> for Mut<'a, T> {
+    fn from(other: NonSendMut<'a, T>) -> Mut<'a, T> {
+        Mut {
+            value: other.value,
+            ticks: other.ticks,
+        }
+    }
+}
+
+impl<'a, T: ?Sized> Ref<'a, T> {
+    pub fn into_inner(self) -> &'a T {
+        self.value
+    }
+}
+
+impl<'w, 'a, T> IntoIterator for &'a Ref<'w, T>
+where
+    &'a T: Iterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
 macro_rules! change_detection_impl {
     ($name:ident<$( $generics:tt),+>,$target:ty,$($traits:ident)?) => {
         impl<$($generics),*:?Sized $(+$traits)?> DetectChanges for $name<$($generics),*>{
@@ -205,37 +277,39 @@ macro_rules! change_detection_mut_impl {
     };
 }
 
-macro_rules! impl_method {
+macro_rules! impl_methods {
     ($name:ident < $( $generics:tt ),+>, $target:ty, $($traits:ident)?) => {
-        #[inline]
-        pub fn into_inner(mut self)->&'a mut &target{
-            self.set_changed()
-            self.value
-        }
+        impl<$($generics),* : ?Sized $(+$traits)?> $name<$($generics),*>{
+            #[inline]
+            pub fn into_inner(mut self)->&'a mut $target{
+                self.set_changed();
+                self.value
+            }
 
-        pub fn reborrow(&mut self) -> Mut<'_,$target>{
-            Mut{
-                value: self.value,
-                ticks: TicksMut{
-                    added: self.ticks.added,
-                    changed: self.ticks.changed,
-                    last_run: self.ticks.last_run,
-                    this_run: self.ticks.this_run
+            pub fn reborrow(&mut self) -> Mut<'_,$target>{
+                Mut{
+                    value: self.value,
+                    ticks: TicksMut{
+                        added: self.ticks.added,
+                        changed: self.ticks.changed,
+                        last_run: self.ticks.last_run,
+                        this_run: self.ticks.this_run
+                    }
                 }
             }
-        }
 
-        pub fn map_unchanged<U:?Sized>(self, f:impl FnOnce(&mut $target)->&mut U)->Mut<'a,U>{
-            Mut{
-                value:f(self.value),
-                ticks:self.ticks,
+            pub fn map_unchanged<U:?Sized>(self, f:impl FnOnce(&mut $target)->&mut U)->Mut<'a,U>{
+                Mut{
+                    value:f(self.value),
+                    ticks:self.ticks,
+                }
             }
         }
     };
 }
 
 macro_rules! impl_debug {
-    ($name:ident < $( $generics:tt ),+> $($traits:ident)?) => {
+    ($name:ident < $( $generics:tt ),+>, $($traits:ident)?) => {
         impl<$($generics),* : ?Sized $(+$traits)?> std::fmt::Debug for $name<$($generics),*>
             where T : std::fmt::Debug
         {
@@ -248,5 +322,18 @@ macro_rules! impl_debug {
     };
 }
 
+change_detection_impl!(Res<'a, T>, T, Resource);
+impl_debug!(Res<'a, T>, Resource);
+
+change_detection_impl!(ResMut<'a, T>, T, Resource);
+change_detection_mut_impl!(ResMut<'a, T>, T, Resource);
+impl_methods!(ResMut<'a, T>, T, Resource);
+impl_debug!(ResMut<'a, T>, Resource);
+
 change_detection_impl!(NonSendMut<'a, T>, T,);
 change_detection_mut_impl!(NonSendMut<'a, T>, T,);
+impl_methods!(NonSendMut<'a, T>, T,);
+impl_debug!(NonSendMut<'a, T>,);
+
+change_detection_impl!(Ref<'a, T>, T,);
+impl_debug!(Ref<'a, T>,);
