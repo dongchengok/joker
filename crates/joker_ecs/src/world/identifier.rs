@@ -2,6 +2,8 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use super::{FromWorld, World};
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct WorldId(usize);
 
@@ -18,9 +20,11 @@ impl WorldId {
     }
 }
 
-// impl FromWorld for WorldId{
-//     #[inline]
-//     fn from_world(world:&mut World)->Self{
-//         world.id()
-//     }
-// }
+impl FromWorld for WorldId {
+    #[inline]
+    fn from_world(world: &mut World) -> Self {
+        world.id()
+    }
+}
+
+// unsafe impl ReadOnlySystemParam for WorldId {}

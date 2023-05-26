@@ -5,4 +5,7 @@ mod component;
 mod world;
 mod system;
 mod bundle;
+mod event;
 mod change_detection;
+mod removal_detection;
+mod query;
