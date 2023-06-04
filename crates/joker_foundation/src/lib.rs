@@ -1,13 +1,12 @@
 #![allow(unused)]
 
 use std::mem::ManuallyDrop;
+use hashbrown::hash_map::DefaultHashBuilder;
 
-use ahash::RandomState;
+pub type HashMap<K, V> = hashbrown::HashMap<K, V, DefaultHashBuilder>;
+pub type HashSet<T> = hashbrown::HashSet<T, DefaultHashBuilder>;
 
-pub type HashMap<K, V> = hashbrown::HashMap<K, V, RandomState>;
-pub type HashSet<T> = hashbrown::HashSet<T, RandomState>;
-
-pub type Entry<'a, K, V> = hashbrown::hash_map::Entry<'a, K, V, RandomState>;
+pub type Entry<'a, K, V> = hashbrown::hash_map::Entry<'a, K, V, DefaultHashBuilder>;
 
 pub struct OnDrop<F: FnOnce()> {
     callback: ManuallyDrop<F>,
@@ -32,6 +31,8 @@ impl<F: FnOnce()> Drop for OnDrop<F> {
 mod tests {
     use std::mem::ManuallyDrop;
 
+    use crate::HashSet;
+
     #[derive(Debug)]
     struct Object {
         id: i32,
@@ -45,6 +46,10 @@ mod tests {
 
     #[test]
     fn test_drop_into() {
+        // let a = HashSet::new::<i32>();
+        let b:hashbrown::HashSet<i32> = hashbrown::HashSet::new();
+        // let a = joker_foundation::HashSet::new::<i32>();
+
         let obj = Object { id: 1i32 };
         //转移所有权
         let obj_drop = ManuallyDrop::new(obj);

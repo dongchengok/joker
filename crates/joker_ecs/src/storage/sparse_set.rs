@@ -1,10 +1,14 @@
 #![allow(unused)]
 
+use std::cell::UnsafeCell;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use crate::component::{ComponentId, ComponentInfo};
+use joker_ptr::{OwningPtr, Ptr};
+
+use crate::component::{self, ComponentId, ComponentInfo, ComponentTicks, Tick, TickCells};
 use crate::entity::Entity;
+use crate::storage::table::TableRow;
 
 use super::table::Column;
 
@@ -20,39 +24,6 @@ pub struct SparseArray<I, V = I> {
 pub struct ImmutableSparseArray<I, V = I> {
     values: Box<[Option<V>]>,
     marker: PhantomData<I>,
-}
-
-#[derive(Debug)]
-pub struct SparseSet<I, V: 'static> {
-    dense: Vec<V>,
-    indices: Vec<I>,
-    sparse: SparseArray<I, usize>,
-}
-
-#[derive(Default)]
-pub struct SparseSets {
-    sets: SparseSet<ComponentId, ComponentSparseSet>,
-}
-
-#[derive(Debug)]
-pub struct ImmutableSparseSet<I, V: 'static> {
-    dense: Box<[V]>,
-    indices: Box<[I]>,
-    sparse: ImmutableSparseArray<I, usize>,
-}
-
-pub struct ComponentSparseSet {
-    dense: Column,
-    #[cfg(not(debug_assertions))]
-    entities: Vec<EntityIndex>,
-    #[cfg(debug_assertions)]
-    entities: Vec<Entity>,
-    sparse: SparseArray<EntityIndex, u32>,
-}
-
-pub trait SparseSetIndex: Clone + PartialEq + Eq + Hash {
-    fn sparse_set_index(&self) -> usize;
-    fn get_sparse_set_index(value: usize) -> Self;
 }
 
 impl<I: SparseSetIndex, V> Default for SparseArray<I, V> {
@@ -127,6 +98,204 @@ impl<I: SparseSetIndex, V> SparseArray<I, V> {
             marker: PhantomData,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct ComponentSparseSet {
+    dense: Column,
+    #[cfg(not(debug_assertions))]
+    entities: Vec<EntityIndex>,
+    #[cfg(debug_assertions)]
+    entities: Vec<Entity>,
+    sparse: SparseArray<EntityIndex, u32>,
+}
+
+impl ComponentSparseSet {
+    pub(crate) fn new(component_info: &ComponentInfo, capacity: usize) -> Self {
+        Self {
+            dense: Column::with_capacity(component_info, capacity),
+            entities: Vec::with_capacity(capacity),
+            sparse: Default::default(),
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.dense.clear();
+        self.entities.clear();
+        self.sparse.clear();
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.dense.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.dense.len() == 0
+    }
+
+    pub(crate) unsafe fn insert(
+        &mut self,
+        entity: Entity,
+        value: OwningPtr<'_>,
+        change_tick: Tick,
+    ) {
+        if let Some(&dense_index) = self.sparse.get(entity.index()) {
+            #[cfg(debug_assertions)]
+            assert_eq!(entity, self.entities[dense_index as usize]);
+            self.dense
+                .replace(TableRow::new(dense_index as usize), value, change_tick);
+        } else {
+            let dense_index = self.dense.len();
+            self.dense.push(value, ComponentTicks::new(change_tick));
+            self.sparse.insert(entity.index(), dense_index as u32);
+            #[cfg(debug_assertions)]
+            assert_eq!(self.entities.len(), dense_index);
+            #[cfg(not(debug_assertions))]
+            self.entities.push(entity.index());
+            #[cfg(debug_assertions)]
+            self.entities.push(entity);
+        }
+    }
+
+    #[inline]
+    pub fn contains(&self, entity: Entity) -> bool {
+        #[cfg(debug_assertions)]
+        {
+            if let Some(&dense_index) = self.sparse.get(entity.index()) {
+                #[cfg(debug_assertions)]
+                assert_eq!(entity, self.entities[dense_index as usize]);
+                true
+            } else {
+                false
+            }
+            #[cfg(not(debug_assertions))]
+            self.sparse.contains(entities.index())
+        }
+    }
+
+    #[inline]
+    pub fn get(&self, entity: Entity) -> Option<Ptr<'_>> {
+        self.sparse.get(entity.index()).map(|dense_index| {
+            let dense_index = (*dense_index) as usize;
+            #[cfg(debug_assertions)]
+            assert_eq!(entity, self.entities[dense_index]);
+            unsafe { self.dense.get_data_unchecked(TableRow::new(dense_index)) }
+        })
+    }
+
+    #[inline]
+    pub fn get_with_ticks(&self, entity: Entity) -> Option<(Ptr<'_>, TickCells<'_>)> {
+        let dense_index = TableRow::new(*self.sparse.get(entity.index())? as usize);
+        #[cfg(debug_assertions)]
+        assert_eq!(entity, self.entities[dense_index.index()]);
+        unsafe {
+            Some((
+                self.dense.get_data_unchecked(dense_index),
+                TickCells {
+                    added: self.dense.get_added_ticks_unchecked(dense_index),
+                    changed: self.dense.get_changed_ticks_unchecked(dense_index),
+                },
+            ))
+        }
+    }
+
+    #[inline]
+    pub fn get_added_ticks(&self, entity: Entity) -> Option<&UnsafeCell<Tick>> {
+        let dense_index = *self.sparse.get(entity.index())? as usize;
+        #[cfg(debug_assertions)]
+        assert_eq!(entity, self.entities[dense_index]);
+        unsafe {
+            Some(
+                self.dense
+                    .get_added_ticks_unchecked(TableRow::new(dense_index)),
+            )
+        }
+    }
+
+    #[inline]
+    pub fn get_changed_ticks(&self, entity: Entity) -> Option<&UnsafeCell<Tick>> {
+        let dense_index = *self.sparse.get(entity.index())? as usize;
+        #[cfg(debug_assertions)]
+        assert_eq!(entity, self.entities[dense_index]);
+        unsafe {
+            Some(
+                self.dense
+                    .get_changed_ticks_unchecked(TableRow::new(dense_index)),
+            )
+        }
+    }
+
+    #[inline]
+    pub fn get_ticks(&self, entity: Entity) -> Option<ComponentTicks> {
+        let dense_index = *self.sparse.get(entity.index())? as usize;
+        #[cfg(debug_assertions)]
+        assert_eq!(entity, self.entities[dense_index]);
+        unsafe { Some(self.dense.get_ticks_unchecked(TableRow::new(dense_index))) }
+    }
+
+    #[must_use = "返回的指针必须被使用，用于删除组件"]
+    pub(crate) fn remove_and_forget(&mut self, entity: Entity) -> Option<OwningPtr<'_>> {
+        self.sparse.remove(entity.index()).map(|dense_index| {
+            let dense_index = dense_index as usize;
+            debug_assert_eq!(entity, self.entities[dense_index]);
+            self.entities.swap_remove(dense_index);
+            let is_last = dense_index == self.dense.len() - 1;
+            let (value, _) = unsafe {
+                self.dense
+                    .swap_remove_and_forget_unchecked(TableRow::new(dense_index))
+            };
+            if !is_last {
+                let swapped_entity = self.entities[dense_index];
+                #[cfg(not(debug_assertions))]
+                let index = swapped_entity;
+                #[cfg(debug_assertions)]
+                let index = swapped_entity.index();
+                *self.sparse.get_mut(index).unwrap() = dense_index as u32;
+            }
+            value
+        })
+    }
+
+    pub(crate) fn remove(&mut self, entity: Entity) -> bool {
+        if let Some(dense_index) = self.sparse.remove(entity.index()) {
+            let dense_index = dense_index as usize;
+            debug_assert_eq!(entity, self.entities[dense_index]);
+            self.entities.swap_remove(dense_index);
+            let is_last = dense_index == self.dense.len() - 1;
+            unsafe { self.dense.swap_remove_unchecked(TableRow::new(dense_index)) }
+            if !is_last {
+                let swapped_entity = self.entities[dense_index];
+                #[cfg(not(debug_assertions))]
+                let index = swapped_entity;
+                #[cfg(debug_assertions)]
+                let index = swapped_entity.index();
+                *self.sparse.get_mut(index).unwrap() = dense_index as u32;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn check_change_ticks(&mut self, change_tick: Tick) {
+        self.dense.check_change_ticks(change_tick);
+    }
+}
+
+#[derive(Debug)]
+pub struct SparseSet<I, V: 'static> {
+    dense: Vec<V>,
+    indices: Vec<I>,
+    sparse: SparseArray<I, usize>,
+}
+
+#[derive(Debug)]
+pub struct ImmutableSparseSet<I, V: 'static> {
+    dense: Box<[V]>,
+    indices: Box<[I]>,
+    sparse: ImmutableSparseArray<I, usize>,
 }
 
 macro_rules! impl_sparse_set {
@@ -270,6 +439,11 @@ impl<I: SparseSetIndex, V> SparseSet<I, V> {
     }
 }
 
+pub trait SparseSetIndex: Clone + PartialEq + Eq + Hash {
+    fn sparse_set_index(&self) -> usize;
+    fn get_sparse_set_index(value: usize) -> Self;
+}
+
 macro_rules! impl_sparse_set_index {
     ($($ty:ty),+) => {
         $(impl SparseSetIndex for $ty{
@@ -287,10 +461,9 @@ macro_rules! impl_sparse_set_index {
 }
 impl_sparse_set_index!(u8, u16, u32, u64, usize);
 
-impl ComponentSparseSet{
-    // pub fn new(component_info:&ComponentInfo, capacity:usize)->Self{
-    //     Self { dense: Column::, entities: (), sparse: () }
-    // }
+#[derive(Default)]
+pub struct SparseSets {
+    sets: SparseSet<ComponentId, ComponentSparseSet>,
 }
 
 impl SparseSets {
@@ -314,13 +487,98 @@ impl SparseSets {
         self.sets.get(comonent_id)
     }
 
-    // pub fn get_or_insert(&mut self, component_info: &ComponentInfo) -> &mut ComponentSparseSet {
-    //     if !self.sets.contains(component_info.id()) {
-    //         self.sets.insert(
-    //             component_info.id(),
-    //             ComponentSparseSet::new(component_info, 64),
-    //         );
-    //     }
-    //     self.sets.get_mut(component_info.id()).unwrap()
-    // }
+    pub(crate) fn get_or_insert(
+        &mut self,
+        component_info: &ComponentInfo,
+    ) -> &mut ComponentSparseSet {
+        if !self.sets.contains(component_info.id()) {
+            self.sets.insert(
+                component_info.id(),
+                ComponentSparseSet::new(component_info, 64),
+            );
+        }
+        self.sets.get_mut(component_info.id()).unwrap()
+    }
+
+    pub(crate) fn get_mut(&mut self, component_id: ComponentId) -> Option<&mut ComponentSparseSet> {
+        self.sets.get_mut(component_id)
+    }
+
+    pub(crate) fn clear_entities(&mut self) {
+        for set in self.sets.values_mut() {
+            set.clear();
+        }
+    }
+
+    pub(crate) fn check_change_ticks(&mut self, change_tick: Tick) {
+        for set in self.sets.values_mut() {
+            set.check_change_ticks(change_tick);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{entity::Entity};
+
+    use super::{SparseSet, SparseSets};
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct Foo(usize);
+
+    #[test]
+    fn sparse_set() {
+        let mut set = SparseSet::<Entity, Foo>::default();
+        let e0 = Entity::from_raw(0);
+        let e1 = Entity::from_raw(1);
+        let e2 = Entity::from_raw(2);
+        let e3 = Entity::from_raw(3);
+        let e4 = Entity::from_raw(4);
+
+        set.insert(e1, Foo(1));
+        set.insert(e2, Foo(2));
+        set.insert(e3, Foo(3));
+
+        assert_eq!(set.get(e0), None);
+        assert_eq!(set.get(e1), Some(&Foo(1)));
+        assert_eq!(set.get(e2), Some(&Foo(2)));
+        assert_eq!(set.get(e3), Some(&Foo(3)));
+        assert_eq!(set.get(e4), None);
+
+        {
+            let iter_results = set.values().collect::<Vec<_>>();
+            assert_eq!(iter_results, vec![&Foo(1), &Foo(2), &Foo(3)]);
+        }
+
+        assert_eq!(set.remove(e2), Some(Foo(2)));
+        assert_eq!(set.remove(e2), None);
+
+        assert_eq!(set.get(e0), None);
+        assert_eq!(set.get(e1), Some(&Foo(1)));
+        assert_eq!(set.get(e2), None);
+        assert_eq!(set.get(e3), Some(&Foo(3)));
+        assert_eq!(set.get(e4), None);
+
+        assert_eq!(set.remove(e1), Some(Foo(1)));
+
+        assert_eq!(set.get(e0), None);
+        assert_eq!(set.get(e1), None);
+        assert_eq!(set.get(e2), None);
+        assert_eq!(set.get(e3), Some(&Foo(3)));
+        assert_eq!(set.get(e4), None);
+
+        set.insert(e1, Foo(10));
+
+        assert_eq!(set.get(e1), Some(&Foo(10)));
+
+        *set.get_mut(e1).unwrap() = Foo(11);
+        assert_eq!(set.get(e1), Some(&Foo(11)));
+    }
+
+    #[test]
+    fn sparse_sets(){
+        let mut sets = SparseSets::default();
+        // #[derive(Component, Default, Debug)]
+        // struct TestComponent1;
+    }
 }

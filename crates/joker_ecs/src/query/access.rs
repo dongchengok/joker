@@ -2,7 +2,10 @@
 
 use crate::storage::SparseSetIndex;
 use fixedbitset::FixedBitSet;
+use joker_foundation::HashSet;
+use std::collections::hash_map::RandomState;
 use std::fmt;
+use std::hash::Hash;
 use std::marker::PhantomData;
 
 struct FormattedBitSet<'a, T: SparseSetIndex> {
@@ -205,7 +208,7 @@ impl<T: SparseSetIndex> FilteredAccess<T> {
         }
     }
 
-    pub fn add_without(&mut self, index: T) {
+    pub fn and_without(&mut self, index: T) {
         let index = index.sparse_set_index();
         for filter in &mut self.filter_sets {
             filter.without.grow(index + 1);
@@ -214,7 +217,7 @@ impl<T: SparseSetIndex> FilteredAccess<T> {
     }
 
     pub fn append_or(&mut self, other: &FilteredAccess<T>) {
-        self.filter_sets.append(&mut self.filter_sets.clone());
+        self.filter_sets.append(&mut other.filter_sets.clone());
     }
 
     pub fn extend_access(&mut self, other: &FilteredAccess<T>) {
@@ -307,9 +310,74 @@ pub struct FilteredAccessSet<T: SparseSetIndex> {
 }
 
 impl<T: SparseSetIndex> FilteredAccessSet<T> {
+    #[inline]
+    pub fn combined_access(&self) -> &Access<T> {
+        &self.combined_access
+    }
+
+    pub fn is_compatible(&self, other: &FilteredAccessSet<T>) -> bool {
+        if self.combined_access.is_compatible(other.combined_access()) {
+            return true;
+        }
+        for filtered in &self.filtered_accesses {
+            for other_filtered in &other.filtered_accesses {
+                if !filtered.is_compatible(other_filtered) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    pub fn get_conflicts(&self, other: &FilteredAccessSet<T>) -> Vec<T> {
+        let mut conflicts = HashSet::new();
+        if !self.combined_access.is_compatible(other.combined_access()) {
+            for filtered in &self.filtered_accesses {
+                for other_filtered in &other.filtered_accesses {
+                    conflicts.extend(filtered.get_conflicts(other_filtered).into_iter());
+                }
+            }
+        }
+        conflicts.into_iter().collect()
+    }
+
+    pub fn get_conflicts_single(&self, filtered_access: &FilteredAccess<T>) -> Vec<T> {
+        let mut conflicts = HashSet::new();
+        if !self.combined_access.is_compatible(filtered_access.access()) {
+            for filtered in &self.filtered_accesses {
+                conflicts.extend(filtered.get_conflicts(filtered_access).into_iter());
+            }
+        }
+        conflicts.into_iter().collect()
+    }
+
     pub fn add(&mut self, filtered_access: FilteredAccess<T>) {
         self.combined_access.extend(&filtered_access.access);
         self.filtered_accesses.push(filtered_access);
+    }
+
+    pub(crate) fn add_unfiltered_read(&mut self, index: T) {
+        let mut filter = FilteredAccess::default();
+        filter.add_read(index);
+        self.add(filter);
+    }
+
+    pub(crate) fn add_unfiltered_write(&mut self, index: T) {
+        let mut filter = FilteredAccess::default();
+        filter.add_write(index);
+        self.add(filter);
+    }
+
+    pub fn extend(&mut self, filtered_access_set: FilteredAccessSet<T>) {
+        self.combined_access
+            .extend(&filtered_access_set.combined_access);
+        self.filtered_accesses
+            .extend(filtered_access_set.filtered_accesses);
+    }
+
+    pub fn clear(&mut self) {
+        self.combined_access.clear();
+        self.filtered_accesses.clear();
     }
 }
 
@@ -319,5 +387,138 @@ impl<T: SparseSetIndex> Default for FilteredAccessSet<T> {
             combined_access: Default::default(),
             filtered_accesses: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fixedbitset::FixedBitSet;
+    use super::Access;
+    use super::AccessFilters;
+    use super::FilteredAccess;
+    use super::FilteredAccessSet;
+    use std::marker::PhantomData;
+
+    #[test]
+    fn read_all_access_conflicts() {
+        let mut access_a = Access::<usize>::default();
+        access_a.grow(10);
+        access_a.add_write(0);
+
+        let mut access_b = Access::<usize>::default();
+        access_b.read_all();
+
+        assert!(!access_b.is_compatible(&access_a));
+
+        let mut access_a = Access::<usize>::default();
+        access_a.grow(10);
+        access_a.read_all();
+
+        let mut access_b = Access::<usize>::default();
+        access_b.read_all();
+
+        assert!(access_b.is_compatible(&access_a));
+    }
+
+    #[test]
+    fn access_get_conflics() {
+        let mut access_a = Access::<usize>::default();
+        access_a.add_read(0);
+        access_a.add_read(1);
+
+        let mut access_b = Access::<usize>::default();
+        access_b.add_read(0);
+        access_b.add_write(1);
+
+        assert_eq!(access_a.get_conflicts(&access_b), vec![1]);
+
+        let mut access_c = Access::<usize>::default();
+        access_c.add_write(0);
+        access_c.add_write(1);
+
+        assert_eq!(access_a.get_conflicts(&access_c), vec![0, 1]);
+        assert_eq!(access_b.get_conflicts(&access_c), vec![0, 1]);
+
+        let mut access_d = Access::<usize>::default();
+        access_d.add_read(0);
+
+        assert_eq!(access_d.get_conflicts(&access_a), vec![]);
+        assert_eq!(access_d.get_conflicts(&access_b), vec![]);
+        assert_eq!(access_d.get_conflicts(&access_c), vec![0]);
+    }
+
+    #[test]
+    fn filtered_combined_access() {
+        let mut access_a = FilteredAccessSet::<usize>::default();
+        access_a.add_unfiltered_write(1);
+
+        let mut filter_b = FilteredAccess::<usize>::default();
+        filter_b.add_write(1);
+        let conflicts = access_a.get_conflicts_single(&filter_b);
+        assert_eq!(
+            &conflicts,
+            &[1_usize],
+            "access_a:{access_a:?}, filter_b:{filter_b:?}"
+        );
+    }
+
+    #[test]
+    fn filtered_access_extend() {
+        let mut access_a = FilteredAccess::<usize>::default();
+        access_a.add_read(0);
+        access_a.add_read(1);
+        access_a.and_with(2);
+
+        let mut access_b = FilteredAccess::<usize>::default();
+        access_b.add_read(0);
+        access_b.add_write(3);
+        access_b.and_without(4);
+
+        access_a.extend(&access_b);
+
+        let mut expected = FilteredAccess::<usize>::default();
+        expected.add_read(0);
+        expected.add_read(1);
+        expected.and_with(2);
+        expected.add_write(3);
+        expected.and_without(4);
+
+        assert!(access_a.eq(&expected));
+    }
+
+    #[test]
+    fn filtered_access_extend_or() {
+        let mut access_a = FilteredAccess::<usize>::default();
+        access_a.add_write(0);
+        access_a.add_write(1);
+
+        let mut access_b = FilteredAccess::<usize>::default();
+        access_b.and_with(2);
+
+        let mut access_c = FilteredAccess::<usize>::default();
+        access_c.and_with(3);
+        access_c.and_without(4);
+
+        access_b.append_or(&access_c);
+
+        access_a.extend(&access_b);
+
+        let mut expected = FilteredAccess::<usize>::default();
+        expected.add_write(0);
+        expected.add_write(1);
+        expected.filter_sets = vec![
+            AccessFilters {
+                with: FixedBitSet::with_capacity_and_blocks(3, [0b111]),
+                without: FixedBitSet::default(),
+                _index_type: PhantomData,
+            },
+            AccessFilters {
+                with: FixedBitSet::with_capacity_and_blocks(4, [0b1011]),
+                without: FixedBitSet::with_capacity_and_blocks(5, [0b10000]),
+                _index_type: PhantomData,
+            },
+        ];
+
+        assert_eq!(access_a, expected);
     }
 }

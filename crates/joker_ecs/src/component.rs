@@ -14,8 +14,8 @@ use joker_ptr::OwningPtr;
 
 use crate::{
     change_detection::MAX_CHANGE_AGE,
-    system::system_param::Resource,
     storage::{sparse_set::SparseSetIndex, Storages},
+    system::system_param::Resource,
 };
 
 pub trait Component: Send + Sync + 'static {
@@ -316,12 +316,35 @@ impl Components {
 //     pub const MAX:Self = Self::new(MAX_CHANGE_AGE);
 // }
 
-// impl ComponentTicks{
-//     #[inline]
-//     pub fn is_added(&self, last_run:Tick, this_run:Tick)->bool{
-//         self.added.
-//     }
-// }
+#[derive(Copy, Clone, Debug)]
+pub struct ComponentTicks {
+    pub(crate) added: Tick,
+    pub(crate) changed: Tick,
+}
+
+impl ComponentTicks {
+    #[inline]
+    pub fn is_added(&self, last_run: Tick, this_run: Tick) -> bool {
+        self.added.is_newer_than(last_run, this_run)
+    }
+
+    #[inline]
+    pub fn is_changed(&self, last_run: Tick, this_run: Tick) -> bool {
+        self.changed.is_newer_than(last_run, this_run)
+    }
+
+    pub(crate) fn new(change_tick: Tick) -> Self {
+        Self {
+            added: change_tick,
+            changed: change_tick,
+        }
+    }
+
+    #[inline]
+    pub fn set_changed(&mut self, change_tick: Tick) {
+        self.changed = change_tick
+    }
+}
 
 #[cfg(test)]
 mod tests {
