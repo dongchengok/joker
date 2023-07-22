@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use joker_ptr::UnsafeCellDeref;
+use joker_ptr::{UnsafeCellDeref, PtrMut};
 use std::{
     array::IntoIter,
     ops::{Deref, DerefMut},
@@ -337,3 +337,8 @@ impl_debug!(NonSendMut<'a, T>,);
 
 change_detection_impl!(Ref<'a, T>, T,);
 impl_debug!(Ref<'a, T>,);
+
+pub struct MutUntyped<'a> {
+    pub(crate) value: PtrMut<'a>,
+    pub(crate) ticks: TicksMut<'a>,
+}

@@ -411,7 +411,6 @@ impl<I: SparseSetIndex, V> SparseSet<I, V> {
     }
 
     pub fn remove(&mut self, index: I) -> Option<V> {
-        todo!("这里不太对吧，删除最后一个sparse的索引关系被遗留了下来，如果再娶的话有问题吧，或者是考虑没有重新分配，所以没问题？");
         self.sparse.remove(index).map(|dense_index| {
             let is_last = dense_index == (self.dense.len() - 1);
             let value = self.dense.swap_remove(dense_index);

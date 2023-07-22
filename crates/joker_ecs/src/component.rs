@@ -14,7 +14,7 @@ use joker_ptr::OwningPtr;
 
 use crate::{
     change_detection::MAX_CHANGE_AGE,
-    storage::{sparse_set::SparseSetIndex, Storages},
+    storage::{SparseSetIndex, Storages},
     system::system_param::Resource,
 };
 
@@ -310,6 +310,22 @@ impl Components {
     //     components.push(info);
     //     index
     // }
+
+    #[inline]
+    pub fn get_info(&self, id: ComponentId) -> Option<&ComponentInfo> {
+        self.components.get(id.0)
+    }
+
+    #[inline]
+    pub fn get_name(&self, id: ComponentId) -> Option<&str> {
+        self.get_info(id).map(|descriptor| descriptor.name())
+    }
+
+    #[inline]
+    pub unsafe fn get_info_unchecked(&self, id: ComponentId) -> &ComponentInfo {
+        debug_assert!(id.index() < self.components.len());
+        self.components.get_unchecked(id.0)
+    }
 }
 
 // impl Tick{

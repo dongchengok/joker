@@ -5,10 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-joker_rhi = { path = "crates/joker_rhi" }
-
 [workspace]
 members = [
     "crates/*",
 ]
+
+[dependencies]
+joker_internal = { path="crates/joker_internal"}

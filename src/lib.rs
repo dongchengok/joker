@@ -2,9 +2,9 @@ pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
-pub mod rhi{
-    pub use joker_rhi::*;
-}
+// pub mod rhi{
+//     pub use joker_rhi::*;
+// }
 
 #[cfg(test)]
 mod tests {

@@ -201,7 +201,6 @@ impl BlobVec {
         self.get_ptr_mut().byte_add(new_len * size).promote()
     }
 
-    // TODO 这里的拷贝检查没看懂为什么是这样的,而且没有调用析构函数
     #[inline]
     pub unsafe fn swap_remove_unchecked(&mut self, index: usize, ptr: PtrMut<'_>) {
         debug_assert!(index < self.len());

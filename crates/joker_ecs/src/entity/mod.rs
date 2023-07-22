@@ -5,8 +5,8 @@ pub use map_entities::*;
 use serde::{Deserialize, Serialize};
 
 use crate::archetype::{ArchetypeId, ArchetypeRow};
-use crate::storage::sparse_set::SparseSetIndex;
-use crate::storage::table::{TableId, TableRow};
+use crate::storage::SparseSetIndex;
+use crate::storage::{TableId, TableRow};
 
 #[cfg(target_has_atomic = "64")]
 use std::sync::atomic::AtomicI64 as AtomicIdCursor;
@@ -482,7 +482,7 @@ pub struct EntityLocation {
     pub archetype_id: ArchetypeId,
     pub archetype_row: ArchetypeRow,
     pub table_id: TableId,
-    pub table_raw: TableRow,
+    pub table_row: TableRow,
 }
 
 impl EntityLocation {
@@ -490,7 +490,7 @@ impl EntityLocation {
         archetype_id: ArchetypeId::INVALID,
         archetype_row: ArchetypeRow::INVALID,
         table_id: TableId::INVALID,
-        table_raw: TableRow::INVALID,
+        table_row: TableRow::INVALID,
     };
 }
 

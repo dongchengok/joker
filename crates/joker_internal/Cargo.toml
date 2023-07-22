@@ -1,0 +1,12 @@
+[package]
+name = "joker_internal"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+joker_app = { path = "../joker_app"}
+joker_ptr = { path = "../joker_ptr"}
+joker_ecs = { path = "../joker_ecs"}
+joker_foundation = { path = "../joker_foundation"}

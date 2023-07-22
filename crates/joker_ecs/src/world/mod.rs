@@ -5,10 +5,12 @@ mod identifier;
 use std::{cell::UnsafeCell, marker::PhantomData, sync::atomic::AtomicU32};
 
 pub use identifier::WorldId;
+// pub use entity_ref::{EntityMut};
 
 use crate::{
+    archetype::Archetypes,
     component::{Components, Tick},
-    entity::Entities,
+    entity::{Entities, Entity, EntityLocation, EntityMap},
     storage::Storages,
 };
 
@@ -16,7 +18,7 @@ pub struct World {
     id: WorldId,
     pub entities: Entities,
     pub components: Components,
-    // pub archetypes:Archetypes,
+    pub archetypes: Archetypes,
     pub storages: Storages,
     // pub bundles:Bundles,
     // pub removed_components:RemovedComponentEvents,
@@ -28,17 +30,48 @@ pub struct World {
 }
 
 #[derive(Copy, Clone)]
+pub struct EntityRef<'w> {
+    world: &'w World,
+    entity: Entity,
+    location: EntityLocation,
+}
+
+pub struct EntityMut<'w> {
+    world: &'w mut World,
+    entity: Entity,
+    location: EntityLocation,
+}
+
+impl<'w> EntityMut<'w> {
+    #[inline]
+    pub(crate) unsafe fn new(
+        world: &'w mut World,
+        entity: Entity,
+        location: EntityLocation,
+    ) -> Self {
+        debug_assert!(world.entities().contains(entity));
+        debug_assert_eq!(world.entities().get(entity), Some(location));
+
+        EntityMut {
+            world,
+            entity,
+            location,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct UnsafeWorldCell<'w>(*mut World, PhantomData<(&'w World, &'w UnsafeCell<World>)>);
 
 unsafe impl Send for UnsafeWorldCell<'_> {}
 unsafe impl Sync for UnsafeWorldCell<'_> {}
 
-pub trait FromWorld{
-    fn from_world(world:&mut World)->Self;
+pub trait FromWorld {
+    fn from_world(world: &mut World) -> Self;
 }
 
-impl<T:Default> FromWorld for T{
-    fn from_world(world:&mut World)->Self {
+impl<T: Default> FromWorld for T {
+    fn from_world(world: &mut World) -> Self {
         T::default()
     }
 }
@@ -81,7 +114,7 @@ impl Default for World {
             id: WorldId::new().expect("不能创建更多的world了"),
             entities: Entities::new(),
             components: Default::default(),
-            // archetypes:Archetypes::new(),
+            archetypes: Archetypes::new(),
             storages: Default::default(),
             // bundles:Default::default(),
             //removed_components:Default::default(),
@@ -108,4 +141,32 @@ impl World {
     // pub fn as_unsafe_world_cell(&mut self)->UnsafeWorldCell<'_>{
     //     UnsafeWorldCell::new_mutable(self)
     // }
+
+    #[inline]
+    pub fn entities(&self) -> &Entities {
+        &self.entities
+    }
+
+    #[inline]
+    pub unsafe fn entities_mut(&mut self) -> &mut Entities {
+        &mut self.entities
+    }
+
+    pub fn spawn_empty(&mut self) -> EntityMut {
+        self.flush();
+        let entity = self.entities.alloc();
+        unsafe { self.spawn_at_empty_internal(entity) }
+    }
+
+    unsafe fn spawn_at_empty_internal(&mut self, entity: Entity) -> EntityMut {
+        let archetype = self.archetypes.empty_mut();
+        let table_row = self.storages.tables[archetype.table_id()].allocate(entity);
+        let location = archetype.allocate(entity, table_row);
+        self.entities.set(entity.index(), location);
+        EntityMut::new(self, entity, location)
+    }
+
+    pub(crate) fn flush(&mut self) {
+        // let empty_archetype = self.archetypes
+    }
 }
