@@ -518,7 +518,7 @@ impl SparseSets {
 
 #[cfg(test)]
 mod tests {
-    use crate::{entity::Entity};
+    use crate::entity::Entity;
 
     use super::{SparseSet, SparseSets};
 

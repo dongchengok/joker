@@ -6,33 +6,22 @@ use std::{
     borrow::{Borrow, Cow},
     cell::UnsafeCell,
     char::MAX,
+    marker::PhantomData,
     mem::needs_drop,
 };
 
 use joker_foundation::HashMap;
-use joker_ptr::OwningPtr;
+use joker_ptr::{OwningPtr, UnsafeCellDeref};
 
 use crate::{
     change_detection::MAX_CHANGE_AGE,
     storage::{SparseSetIndex, Storages},
-    system::system_param::Resource,
+    system::system_param::{Local, Resource},
+    world::FromWorld, TypeIdMap,
 };
 
 pub trait Component: Send + Sync + 'static {
     type Storage: ComponentStorage;
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ComponentTick {
-    pub added: Tick,
-    pub changed: Tick,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum StorageType {
-    #[default]
-    Table,
-    SparseSet,
 }
 
 pub struct TableStorage;
@@ -43,50 +32,6 @@ pub trait ComponentStorage: sealed::Sealed {
     const STORAGE_TYPE: StorageType;
 }
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for super::TableStorage {}
-    impl Sealed for super::SparseStorage {}
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ComponentId(usize);
-
-pub struct ComponentDescriptor {
-    name: Cow<'static, str>,
-    storage_type: StorageType,
-    is_send_and_sync: bool,
-    type_id: Option<TypeId>,
-    layout: Layout,
-    drop: Option<for<'a> unsafe fn(OwningPtr<'a>)>,
-}
-
-#[derive(Debug)]
-pub struct ComponentInfo {
-    id: ComponentId,
-    descriptor: ComponentDescriptor,
-}
-
-type TypeIdMap<V> = HashMap<TypeId, V>;
-
-#[derive(Debug, Default)]
-pub struct Components {
-    components: Vec<ComponentInfo>,
-    indices: TypeIdMap<usize>,
-    resource_indices: TypeIdMap<usize>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Tick {
-    tick: u32,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct TickCells<'a> {
-    pub added: &'a UnsafeCell<Tick>,
-    pub changed: &'a UnsafeCell<Tick>,
-}
-
 impl ComponentStorage for TableStorage {
     const STORAGE_TYPE: StorageType = StorageType::Table;
 }
@@ -95,28 +40,23 @@ impl ComponentStorage for SparseStorage {
     const STORAGE_TYPE: StorageType = StorageType::SparseSet;
 }
 
-impl ComponentId {
-    #[inline]
-    pub fn new(index: usize) -> Self {
-        ComponentId(index)
-    }
-
-    #[inline]
-    pub fn index(&self) -> usize {
-        self.0
-    }
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for super::TableStorage {}
+    impl Sealed for super::SparseStorage {}
 }
 
-impl SparseSetIndex for ComponentId {
-    #[inline]
-    fn sparse_set_index(&self) -> usize {
-        self.0
-    }
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum StorageType {
+    #[default]
+    Table,
+    SparseSet,
+}
 
-    #[inline]
-    fn get_sparse_set_index(value: usize) -> Self {
-        Self(value)
-    }
+#[derive(Debug)]
+pub struct ComponentInfo {
+    id: ComponentId,
+    descriptor: ComponentDescriptor,
 }
 
 impl ComponentInfo {
@@ -155,11 +95,44 @@ impl ComponentInfo {
     }
 
     pub fn new(id: ComponentId, descriptor: ComponentDescriptor) -> Self {
-        ComponentInfo {
-            id: id,
-            descriptor: descriptor,
-        }
+        ComponentInfo { id, descriptor }
     }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ComponentId(usize);
+
+impl ComponentId {
+    #[inline]
+    pub const fn new(index: usize) -> Self {
+        ComponentId(index)
+    }
+
+    #[inline]
+    pub fn index(&self) -> usize {
+        self.0
+    }
+}
+
+impl SparseSetIndex for ComponentId {
+    #[inline]
+    fn sparse_set_index(&self) -> usize {
+        self.0
+    }
+
+    #[inline]
+    fn get_sparse_set_index(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+pub struct ComponentDescriptor {
+    name: Cow<'static, str>,
+    storage_type: StorageType,
+    is_send_and_sync: bool,
+    type_id: Option<TypeId>,
+    layout: Layout,
+    drop: Option<for<'a> unsafe fn(OwningPtr<'a>)>,
 }
 
 impl std::fmt::Debug for ComponentDescriptor {
@@ -200,8 +173,8 @@ impl ComponentDescriptor {
             storage_type: storage_type,
             is_send_and_sync: true,
             type_id: None,
-            layout: layout,
-            drop: drop,
+            layout,
+            drop,
         }
     }
 
@@ -236,6 +209,134 @@ impl ComponentDescriptor {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
+}
+
+#[derive(Debug, Default)]
+pub struct Components {
+    components: Vec<ComponentInfo>,
+    indices: TypeIdMap<usize>,
+    resource_indices: TypeIdMap<usize>,
+}
+
+impl Components {
+    #[inline]
+    pub fn init_component<T: Component>(&mut self, storages: &mut Storages) -> ComponentId {
+        let type_id = TypeId::of::<T>();
+        let Components {
+            indices,
+            components,
+            ..
+        } = self;
+        let index = indices.entry(type_id).or_insert_with(|| {
+            Components::init_component_inner(components, storages, ComponentDescriptor::new::<T>())
+        });
+        ComponentId(*index)
+    }
+
+    pub fn init_component_with_descriptor(
+        &mut self,
+        storages: &mut Storages,
+        descriptor: ComponentDescriptor,
+    ) -> ComponentId {
+        let index = Components::init_component_inner(&mut self.components, storages, descriptor);
+        ComponentId(index)
+    }
+
+    #[inline]
+    pub fn init_component_inner(
+        components: &mut Vec<ComponentInfo>,
+        storages: &mut Storages,
+        descriptor: ComponentDescriptor,
+    ) -> usize {
+        let index = components.len();
+        let info = ComponentInfo::new(ComponentId(index), descriptor);
+        if info.descriptor.storage_type == StorageType::SparseSet {
+            storages.sparse_sets.get_or_insert(&info);
+        }
+        components.push(info);
+        index
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.components.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.components.len() == 0
+    }
+
+    #[inline]
+    pub fn get_info(&self, id: ComponentId) -> Option<&ComponentInfo> {
+        self.components.get(id.0)
+    }
+
+    #[inline]
+    pub fn get_name(&self, id: ComponentId) -> Option<&str> {
+        self.get_info(id).map(|descriptor| descriptor.name())
+    }
+
+    #[inline]
+    pub unsafe fn get_info_unchecked(&self, id: ComponentId) -> &ComponentInfo {
+        debug_assert!(id.index() < self.components.len());
+        self.components.get_unchecked(id.0)
+    }
+
+    #[inline]
+    pub fn get_id(&self, type_id: TypeId) -> Option<ComponentId> {
+        self.indices.get(&type_id).map(|index| ComponentId(*index))
+    }
+
+    #[inline]
+    pub fn component_id<T: Component>(&self, type_id: TypeId) -> Option<ComponentId> {
+        self.resource_indices
+            .get(&type_id)
+            .map(|index| ComponentId(*index))
+    }
+
+    #[inline]
+    pub fn resource_id<T: Resource>(&mut self) -> ComponentId {
+        unsafe {
+            self.get_or_insert_resource_with(TypeId::of::<T>(), || {
+                ComponentDescriptor::new_resource::<T>()
+            })
+        }
+    }
+
+    #[inline]
+    pub fn init_non_send<T: Any>(&mut self) -> ComponentId {
+        unsafe {
+            self.get_or_insert_resource_with(TypeId::of::<T>(), || {
+                ComponentDescriptor::new_no_send::<T>(StorageType::default())
+            })
+        }
+    }
+
+    #[inline]
+    pub fn get_or_insert_resource_with(
+        &mut self,
+        type_id: TypeId,
+        func: impl FnOnce() -> ComponentDescriptor,
+    ) -> ComponentId {
+        let components = &mut self.components;
+        let index = self.resource_indices.entry(type_id).or_insert_with(|| {
+            let descriptor = func();
+            let index = components.len();
+            components.push(ComponentInfo::new(ComponentId(index), descriptor));
+            index
+        });
+        ComponentId(*index)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &ComponentInfo> + '_ {
+        self.components.iter()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Tick {
+    tick: u32,
 }
 
 impl Tick {
@@ -281,56 +382,21 @@ impl Tick {
     }
 }
 
-impl Components {
-    // #[inline]
-    // pub fn init_component<T:Component>(&mut self, storages:&mut Storages)->ComponentId{
-    //     let type_id = TypeId::of::<T>();
-    //     let Components{
-    //         indices,
-    //         components,
-    //         ..
-    //     } = self;
-    //     let index = indices.entry(type_id).or_insert_with(||{
-    //         Components::init_component_inner(components,storages,ComponentDescriptor::new::<T>())
-    //     });
-    //     ComponentId(*index)
-    // }
-
-    // pub fn init_component_with_descriptor(&mut self, storages:&mut Storages, descriptor:ComponentDescriptor)->ComponentId{
-    //     let index = Components::init_component_inner(&mut self.components, storages, descriptor)
-    // }
-
-    // #[inline]
-    // pub fn init_component_inner(components:&mut Vec<ComponentInfo>, storages:&mut Storages, descriptor:ComponentDescriptor)->usize{
-    //     let index = components.len();
-    //     let info = ComponentInfo::new(ComponentId(index),descriptor);
-    //     if info.descriptor.storage_type==StorageType::SparseSet{
-    //         storages.sparse_sets.get_or_insert(&info);
-    //     }
-    //     components.push(info);
-    //     index
-    // }
-
-    #[inline]
-    pub fn get_info(&self, id: ComponentId) -> Option<&ComponentInfo> {
-        self.components.get(id.0)
-    }
-
-    #[inline]
-    pub fn get_name(&self, id: ComponentId) -> Option<&str> {
-        self.get_info(id).map(|descriptor| descriptor.name())
-    }
-
-    #[inline]
-    pub unsafe fn get_info_unchecked(&self, id: ComponentId) -> &ComponentInfo {
-        debug_assert!(id.index() < self.components.len());
-        self.components.get_unchecked(id.0)
-    }
+#[derive(Copy, Clone, Debug)]
+pub struct TickCells<'a> {
+    pub added: &'a UnsafeCell<Tick>,
+    pub changed: &'a UnsafeCell<Tick>,
 }
 
-// impl Tick{
-//     pub const MAX:Self = Self::new(MAX_CHANGE_AGE);
-// }
+impl<'a> TickCells<'a> {
+    #[inline]
+    pub(crate) unsafe fn read(&self) -> ComponentTicks {
+        ComponentTicks {
+            added: self.added.read(),
+            changed: self.changed.read(),
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct ComponentTicks {
@@ -362,16 +428,35 @@ impl ComponentTicks {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ComponentId;
+pub struct ComponentIdFor<T: Component> {
+    component_id: ComponentId,
+    phantom: PhantomData<T>,
+}
 
-    #[test]
-    fn test_any_type_name() {
-        let name = std::any::type_name::<ComponentId>();
-        assert_eq!(
-            name.to_string(),
-            "joker_ecs::component::ComponentId".to_string()
-        );
+impl<T: Component> FromWorld for ComponentIdFor<T> {
+    fn from_world(world: &mut crate::world::World) -> Self {
+        Self {
+            component_id: world.init_component::<T>(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: Component> std::ops::Deref for ComponentIdFor<T> {
+    type Target = ComponentId;
+    fn deref(&self) -> &Self::Target {
+        &self.component_id
+    }
+}
+
+impl<T: Component> From<ComponentIdFor<T>> for ComponentId {
+    fn from(to_component_id: ComponentIdFor<T>) -> Self {
+        *to_component_id
+    }
+}
+
+impl<'s, T: Component> From<Local<'s, ComponentIdFor<T>>> for ComponentId {
+    fn from(to_component_id: Local<'s, ComponentIdFor<T>>) -> Self {
+        **to_component_id
     }
 }

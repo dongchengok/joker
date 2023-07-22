@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use core::arch;
+use std::ops::{Index, IndexMut};
 
 use joker_foundation::HashMap;
 
@@ -73,26 +74,12 @@ impl BundleComponentStatus for AddBundle {
     }
 }
 
-pub struct SpawnBundleStatus;
+pub(crate) struct SpawnBundleStatus;
 
 impl BundleComponentStatus for SpawnBundleStatus {
     #[inline]
     unsafe fn get_status(&self, index: usize) -> ComponentStatus {
         ComponentStatus::Add
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct ArchetypeComponentId(usize);
-
-impl SparseSetIndex for ArchetypeComponentId {
-    #[inline]
-    fn sparse_set_index(&self) -> usize {
-        self.0
-    }
-
-    fn get_sparse_set_index(value: usize) -> Self {
-        Self(value)
     }
 }
 
@@ -103,9 +90,83 @@ pub struct Edges {
     take_bundle: SparseArray<BundleId, Option<ArchetypeId>>,
 }
 
+impl Edges {
+    #[inline]
+    pub fn get_add_bundle(&self, bundle_id: BundleId) -> Option<ArchetypeId> {
+        self.get_add_bundle_internal(bundle_id)
+            .map(|bundle| bundle.archetype_id)
+    }
+
+    #[inline]
+    pub(crate) fn get_add_bundle_internal(&self, bundle_id: BundleId) -> Option<&AddBundle> {
+        self.add_bundle.get(bundle_id)
+    }
+
+    #[inline]
+    pub(crate) fn insert_add_bundle(
+        &mut self,
+        bundle_id: BundleId,
+        archetype_id: ArchetypeId,
+        bundle_status: Vec<ComponentStatus>,
+    ) {
+        self.add_bundle.insert(
+            bundle_id,
+            AddBundle {
+                archetype_id,
+                bundle_status,
+            },
+        )
+    }
+
+    #[inline]
+    pub fn get_remove_bundle(&self, bundle_id: BundleId) -> Option<Option<ArchetypeId>> {
+        self.remove_bundle.get(bundle_id).cloned()
+    }
+
+    #[inline]
+    pub(crate) fn insert_remove_bundle(
+        &mut self,
+        bundle_id: BundleId,
+        archetype_id: Option<ArchetypeId>,
+    ) {
+        self.remove_bundle.insert(bundle_id, archetype_id);
+    }
+
+    #[inline]
+    pub fn get_take_bundle(&self, bundle_id: BundleId) -> Option<Option<ArchetypeId>> {
+        self.take_bundle.get(bundle_id).cloned()
+    }
+
+    #[inline]
+    pub(crate) fn insert_take_bundle(
+        &mut self,
+        bundle_id: BundleId,
+        archetype_id: Option<ArchetypeId>,
+    ) {
+        self.take_bundle.insert(bundle_id, archetype_id);
+    }
+}
+
 pub struct ArchetypeEntity {
     entity: Entity,
     table_row: TableRow,
+}
+
+impl ArchetypeEntity {
+    #[inline]
+    pub const fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    #[inline]
+    pub const fn table_row(&self) -> TableRow {
+        self.table_row
+    }
+}
+
+pub(crate) struct ArchetypeSwapRemoveResult {
+    pub(crate) swapped_entity: Option<Entity>,
+    pub(crate) table_row: TableRow,
 }
 
 struct ArchetypeComponentInfo {
@@ -176,6 +237,47 @@ impl Archetype {
     }
 
     #[inline]
+    pub fn table_components(&self) -> impl Iterator<Item = ComponentId> + '_ {
+        self.components
+            .iter()
+            .filter(|(_, component)| component.storage_type == StorageType::Table)
+            .map(|(id, _)| *id)
+    }
+
+    #[inline]
+    pub fn sparse_set_components(&self) -> impl Iterator<Item = ComponentId> + '_ {
+        self.components
+            .iter()
+            .filter(|(_, component)| component.storage_type == StorageType::SparseSet)
+            .map(|(id, _)| *id)
+    }
+
+    #[inline]
+    pub fn components(&self) -> impl Iterator<Item = ComponentId> + '_ {
+        self.components.indices()
+    }
+
+    #[inline]
+    pub fn edges(&self) -> &Edges {
+        &self.edges
+    }
+
+    #[inline]
+    pub(crate) fn edges_mut(&mut self) -> &mut Edges {
+        &mut self.edges
+    }
+
+    #[inline]
+    pub fn entity_table_row(&self, row: ArchetypeRow) -> TableRow {
+        self.entities[row.index()].table_row
+    }
+
+    #[inline]
+    pub(crate) fn set_entity_table_row(&mut self, row: ArchetypeRow, table_row: TableRow) {
+        self.entities[row.index()].table_row = table_row
+    }
+
+    #[inline]
     pub(crate) unsafe fn allocate(
         &mut self,
         entity: Entity,
@@ -190,12 +292,96 @@ impl Archetype {
             table_row,
         }
     }
+
+    #[inline]
+    pub(crate) fn reserve(&mut self, additional: usize) {
+        self.entities.reserve(additional)
+    }
+
+    #[inline]
+    pub(crate) fn swap_remove(&mut self, row: ArchetypeRow) -> ArchetypeSwapRemoveResult {
+        let is_last = row.index() == self.entities.len() - 1;
+        let entity = self.entities.swap_remove(row.index());
+        ArchetypeSwapRemoveResult {
+            swapped_entity: if is_last {
+                None
+            } else {
+                Some(self.entities[row.index()].entity)
+            },
+            table_row: entity.table_row,
+        }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.entities.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.entities.is_empty()
+    }
+
+    #[inline]
+    pub fn contains(&self, component_id: ComponentId) -> bool {
+        self.components.contains(component_id)
+    }
+
+    #[inline]
+    pub fn get_storage_type(&self, component_id: ComponentId) -> Option<StorageType> {
+        self.components
+            .get(component_id)
+            .map(|info| info.storage_type)
+    }
+
+    #[inline]
+    pub fn get_archetype_component_id(
+        &self,
+        component_id: ComponentId,
+    ) -> Option<ArchetypeComponentId> {
+        self.components
+            .get(component_id)
+            .map(|info| info.archetype_component_id)
+    }
+
+    pub(crate) fn clear_entities(&mut self) {
+        self.entities.clear();
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ArchetypeGeneration(usize);
+
+impl ArchetypeGeneration {
+    #[inline]
+    pub(crate) const fn initial() -> Self {
+        ArchetypeGeneration(0)
+    }
+
+    #[inline]
+    pub(crate) fn value(self) -> usize {
+        self.0
+    }
 }
 
 #[derive(Hash, PartialEq, Eq)]
 struct ArchetypeIdentity {
     table_components: Box<[ComponentId]>,
     sparse_set_components: Box<[ComponentId]>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct ArchetypeComponentId(usize);
+
+impl SparseSetIndex for ArchetypeComponentId {
+    #[inline]
+    fn sparse_set_index(&self) -> usize {
+        self.0
+    }
+
+    fn get_sparse_set_index(value: usize) -> Self {
+        Self(value)
+    }
 }
 
 pub struct Archetypes {
@@ -216,6 +402,17 @@ impl Archetypes {
     }
 
     #[inline]
+    pub fn generation(&self) -> ArchetypeGeneration {
+        ArchetypeGeneration(self.archetypes.len())
+    }
+
+    #[inline]
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.archetypes.len()
+    }
+
+    #[inline]
     pub fn empty(&self) -> &Archetype {
         unsafe { self.archetypes.get_unchecked(ArchetypeId::EMPTY.index()) }
     }
@@ -226,6 +423,31 @@ impl Archetypes {
             self.archetypes
                 .get_unchecked_mut(ArchetypeId::EMPTY.index())
         }
+    }
+
+    #[inline]
+    pub fn get(&self, id: ArchetypeId) -> Option<&Archetype> {
+        self.archetypes.get(id.index())
+    }
+
+    #[inline]
+    pub(crate) fn get_2_mut(
+        &mut self,
+        a: ArchetypeId,
+        b: ArchetypeId,
+    ) -> (&mut Archetype, &mut Archetype) {
+        if a.index() > b.index() {
+            let (b_slice, a_slice) = self.archetypes.split_at_mut(a.index());
+            (&mut a_slice[0], &mut b_slice[b.index()])
+        } else {
+            let (a_slice, b_slice) = self.archetypes.split_at_mut(b.index());
+            (&mut a_slice[a.index()], &mut b_slice[0])
+        }
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &Archetype> {
+        self.archetypes.iter()
     }
 
     pub(crate) fn get_id_or_insert(
@@ -264,5 +486,32 @@ impl Archetypes {
                 ));
                 id
             })
+    }
+
+    #[inline]
+    pub fn archetype_components_len(&self) -> usize {
+        self.archetype_component_count
+    }
+
+    pub(crate) fn clear_entities(&mut self) {
+        for archetype in &mut self.archetypes {
+            archetype.clear_entities();
+        }
+    }
+}
+
+impl Index<ArchetypeId> for Archetypes {
+    type Output = Archetype;
+
+    #[inline]
+    fn index(&self, index: ArchetypeId) -> &Self::Output {
+        &self.archetypes[index.index()]
+    }
+}
+
+impl IndexMut<ArchetypeId> for Archetypes {
+    #[inline]
+    fn index_mut(&mut self, index: ArchetypeId) -> &mut Self::Output {
+        &mut self.archetypes[index.index()]
     }
 }

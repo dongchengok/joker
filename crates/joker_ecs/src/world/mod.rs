@@ -1,16 +1,17 @@
 #![allow(unused)]
 
+mod entity_ref;
 mod identifier;
 
 use std::{cell::UnsafeCell, marker::PhantomData, sync::atomic::AtomicU32};
 
+pub use entity_ref::EntityMut;
 pub use identifier::WorldId;
-// pub use entity_ref::{EntityMut};
 
 use crate::{
     archetype::Archetypes,
-    component::{Components, Tick},
-    entity::{Entities, Entity, EntityLocation, EntityMap},
+    component::{Component, ComponentId, Components, Tick},
+    entity::{Entities, Entity, EntityMap},
     storage::Storages,
 };
 
@@ -27,37 +28,6 @@ pub struct World {
     pub change_tick: AtomicU32,
     pub last_change_tick: Tick,
     pub last_check_tick: Tick,
-}
-
-#[derive(Copy, Clone)]
-pub struct EntityRef<'w> {
-    world: &'w World,
-    entity: Entity,
-    location: EntityLocation,
-}
-
-pub struct EntityMut<'w> {
-    world: &'w mut World,
-    entity: Entity,
-    location: EntityLocation,
-}
-
-impl<'w> EntityMut<'w> {
-    #[inline]
-    pub(crate) unsafe fn new(
-        world: &'w mut World,
-        entity: Entity,
-        location: EntityLocation,
-    ) -> Self {
-        debug_assert!(world.entities().contains(entity));
-        debug_assert_eq!(world.entities().get(entity), Some(location));
-
-        EntityMut {
-            world,
-            entity,
-            location,
-        }
-    }
 }
 
 #[derive(Copy, Clone)]
@@ -152,6 +122,10 @@ impl World {
         &mut self.entities
     }
 
+    pub fn init_component<T: Component>(&mut self) -> ComponentId {
+        self.components.init_component::<T>(&mut self.storages)
+    }
+
     pub fn spawn_empty(&mut self) -> EntityMut {
         self.flush();
         let entity = self.entities.alloc();
@@ -167,6 +141,12 @@ impl World {
     }
 
     pub(crate) fn flush(&mut self) {
-        // let empty_archetype = self.archetypes
+        let empty_archetype = self.archetypes.empty_mut();
+        let table = &mut self.storages.tables[empty_archetype.table_id()];
+        unsafe {
+            self.entities.flush(|entity, location| {
+                *location = empty_archetype.allocate(entity, table.allocate(entity));
+            });
+        }
     }
 }

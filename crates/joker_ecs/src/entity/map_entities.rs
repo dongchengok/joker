@@ -136,6 +136,22 @@ mod tests {
             "should re-use the same index for further dead refs"
         );
         mapper.finish(&mut world);
-        // let entity = world.spawn_empty().id();
+        let entity = world.spawn_empty().id();
+        assert_eq!(entity.index(), dead_ref.index());
+        assert!(entity.generation() > dead_ref.generation());
+    }
+
+    #[test]
+    fn world_scope_reserves_generations() {
+        let mut map = EntityMap::default();
+        let mut world = World::new();
+
+        let dead_ref = map.world_scope(&mut world, |_, mapper| {
+            mapper.get_or_reserve(Entity::new(0, 0))
+        });
+
+        let entity = world.spawn_empty().id();
+        assert_eq!(entity.index(), dead_ref.index());
+        assert!(entity.generation() > dead_ref.generation());
     }
 }

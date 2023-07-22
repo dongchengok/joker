@@ -6,7 +6,7 @@ use joker_ptr::{OwningPtr, Ptr, PtrMut, UnsafeCellDeref};
 use super::{blob_vec::BlobVec, ImmutableSparseArray, ImmutableSparseSet, SparseSet};
 use crate::{
     component::{
-        self, ComponentId, ComponentInfo, ComponentTick, ComponentTicks, Components, Tick,
+        self, ComponentId, ComponentInfo, ComponentTicks, Components, Tick,
         TickCells,
     },
     entity::Entity,

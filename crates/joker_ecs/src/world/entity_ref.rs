@@ -1,5 +1,9 @@
 #![allow(unused)]
 
+use crate::entity::{Entity, EntityLocation};
+
+use super::World;
+
 #[derive(Copy, Clone)]
 pub struct EntityRef<'w> {
     world: &'w World,
@@ -28,5 +32,16 @@ impl<'w> EntityMut<'w> {
             entity,
             location,
         }
+    }
+
+    #[inline]
+    #[must_use = "Omit the .id() call if you do not need to store the `Entity` identifier."]
+    pub fn id(&self) -> Entity {
+        self.entity
+    }
+
+    #[inline]
+    pub fn location(&self) -> EntityLocation {
+        self.location
     }
 }
